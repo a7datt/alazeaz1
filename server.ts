@@ -241,7 +241,7 @@ async function verifyShamCashTx(txNumber: string, accountAddress: string): Promi
 }
 
 // =================== AHMINIX API HELPERS ===================
-const AHMINIX_BASE = "https://fastcard1.store/client/api";
+const AHMINIX_BASE = "https://api.shams4store.com/client/api/";
 const AHMINIX_TOKEN = process.env.AHMINIX_API_TOKEN || "";
 if (!AHMINIX_TOKEN) console.warn("[SECURITY] ⚠️  AHMINIX_API_TOKEN غير مضبوط في .env");
 
