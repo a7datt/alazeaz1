@@ -1,0 +1,32 @@
+{
+  "name": "العزيز",
+  "short_name": "العزيز",
+  "description": "متجر العزيز لشحن الألعاب والتطبيقات",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#9C0206",
+  "theme_color": "#9C0206",
+  "icons": [
+    {
+      "src": "https://i.ibb.co/rGbGFvs7/image.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://i.ibb.co/rGbGFvs7/image.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://i.ibb.co/rGbGFvs7/image.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "orientation": "portrait",
+  "scope": "/",
+  "categories": ["shopping", "games"]
+}
