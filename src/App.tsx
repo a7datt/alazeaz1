@@ -7328,7 +7328,7 @@ const AdminPanel = ({
                 <div className="space-y-3 pt-2">
                   <button 
                     onClick={() => {
-                      window.open(`https://t.me/العزيز?start=${linkingModal.code}`, '_blank');
+                      window.open(`https://t.me/alazeazstore_bot?start=${linkingModal.code}`, '_blank')
                     }}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-bold shadow-lg shadow-blue-100 dark:shadow-none flex items-center justify-center gap-2 transition-all active:scale-95"
                   >
