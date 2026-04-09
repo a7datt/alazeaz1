@@ -1522,13 +1522,8 @@ export default function App() {
         {/* Ticker / Scrolling Text */}
         {tickerText && tickerText.trim() && (
           <div className={`mx-4 rounded-xl overflow-hidden ${theme.primary} shadow-sm`}>
-            <div className="overflow-hidden py-2 px-3">
-              <div className="ticker-track" style={{ color: "#ffffff" }}>
-                <span className="px-8">{tickerText}</span>
-                <span className="px-8">{tickerText}</span>
-                <span className="px-8">{tickerText}</span>
-                <span className="px-8">{tickerText}</span>
-              </div>
+            <div className="ticker-wrap">
+              <div className="ticker-track">{tickerText}</div>
             </div>
           </div>
         )}
@@ -2679,7 +2674,7 @@ export default function App() {
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    order.status === 'completed' ? 'bg-brand-light text-brand' :
+                    order.status === 'completed' ? 'bg-green-50 text-green-600' :
                     order.status === 'failed' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
                   }`}>
                     {order.status === 'completed' ? <CheckCircle size={20} /> :
@@ -2694,7 +2689,7 @@ export default function App() {
                   <div className="text-left">
                     <p className="font-bold text-brand">{order.total_amount} $</p>
                     <p className={`text-[10px] font-medium ${
-                      order.status === 'completed' ? 'text-brand' :
+                      order.status === 'completed' ? 'text-green-600' :
                       order.status === 'failed' ? 'text-red-500' : 'text-blue-500'
                     }`}>
                       {order.status === 'new' ? 'جديد' : order.status === 'completed' ? 'مكتمل' : order.status === 'failed' || order.status === 'cancelled' ? 'ملغي' : order.status === 'pending_admin' ? 'ينتظر الموافقة' : 'قيد المعالجة'}
@@ -5323,7 +5318,7 @@ const AdminUserCard = ({ u, fetchAdminUsers, handleToggleVip, handleBlockUser, h
 };
 
 // ===================== ADMIN STATS TAB =====================
-const AdminStatsTab = () => {
+const AdminStatsTab = ({ adminFetch }: { adminFetch: (url: string, options?: RequestInit) => Promise<Response> }) => {
   const [filter, setFilter] = React.useState<"daily"|"weekly"|"monthly"|"custom">("monthly");
   const [customFrom, setCustomFrom] = React.useState("");
   const [customTo, setCustomTo] = React.useState("");
@@ -5442,18 +5437,52 @@ const AdminStatsTab = () => {
               </span>
             </div>
             <p className="text-3xl font-black text-amber-700">{stats.profit?.toFixed(2)} $</p>
-            <div className="mt-3 bg-white/60 rounded-xl p-3">
+            <div className="mt-3 bg-white/60 rounded-xl p-3 space-y-1.5">
               <div className="flex justify-between text-[11px]">
-                <span className="text-gray-500">الإيرادات الإجمالية</span>
-                <span className="font-bold text-gray-700">{stats.gross_revenue?.toFixed(2)} $</span>
+                <span className="text-gray-500">إجمالي المبيعات</span>
+                <span className="font-bold text-gray-700">{stats.gross_revenue?.toFixed(4)} $</span>
               </div>
-              <div className="flex justify-between text-[11px] mt-1">
-                <span className="text-gray-500">تكلفة API</span>
-                <span className="font-bold text-red-500">- {stats.api_cost?.toFixed(2)} $</span>
+              <div className="flex justify-between text-[11px]">
+                <span className="text-gray-500">تكلفة API (سعر الشراء)</span>
+                <span className="font-bold text-red-500">- {stats.api_cost?.toFixed(4)} $</span>
               </div>
-              <div className="border-t border-gray-100 mt-2 pt-2 flex justify-between text-[11px]">
+              <div className="border-t border-amber-100 pt-2 flex justify-between text-[11px]">
                 <span className="font-bold text-gray-700">صافي الربح</span>
-                <span className="font-black text-green-600">{stats.profit?.toFixed(2)} $</span>
+                <span className={`font-black ${(stats.profit||0) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                  {stats.profit?.toFixed(4)} $
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* API Details Card */}
+          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Zap size={15} className="text-blue-500"/>
+              <p className="font-bold text-gray-800 text-sm">تفاصيل أرباح API</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+                <p className="text-[9px] text-blue-500 font-bold mb-1">عدد طلبات API المكتملة</p>
+                <p className="text-xl font-black text-blue-700">{stats.accepted_orders}</p>
+              </div>
+              <div className="bg-green-50 rounded-xl p-3 border border-green-100">
+                <p className="text-[9px] text-green-600 font-bold mb-1">متوسط الربح / طلب</p>
+                <p className="text-xl font-black text-green-700">
+                  {stats.accepted_orders > 0 ? ((stats.profit||0) / stats.accepted_orders).toFixed(4) : '0.0000'} $
+                </p>
+              </div>
+              <div className="bg-purple-50 rounded-xl p-3 border border-purple-100 col-span-2">
+                <p className="text-[9px] text-purple-600 font-bold mb-1">هامش الربح الإجمالي</p>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-purple-500 h-2 rounded-full transition-all"
+                      style={{width: `${Math.min(Math.max(stats.profit_margin||0, 0), 100)}%`}}
+                    />
+                  </div>
+                  <span className="font-black text-purple-700 text-sm">{stats.profit_margin?.toFixed(1)}%</span>
+                </div>
               </div>
             </div>
           </div>
@@ -6667,7 +6696,7 @@ const AdminPanel = ({
           {adminTab === "admin_home" && <AdminHomeTab adminUsers={adminUsers} adminOrders={adminOrders} adminTransactions={adminTransactions} setAdminTab={setAdminTab} fetchUser={fetchUser} fetchAdminUsers={fetchAdminUsers} handleToggleVip={handleToggleVip} handleBlockUser={handleBlockUser} handleDeleteUser={handleDeleteUser} handleSendNotification={handleSendNotification} onOpenChatWithUser={(u: any) => { setSelectedChatUser(u); setAdminTab("chat"); }} />}
 
           {/* ===== STATS ===== */}
-          {adminTab === "admin_stats" && <AdminStatsTab />}
+          {adminTab === "admin_stats" && <AdminStatsTab adminFetch={adminFetch} />}
 
           {adminTab === "chat" && <AdminChatView />}
 
