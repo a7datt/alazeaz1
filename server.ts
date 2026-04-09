@@ -2517,7 +2517,7 @@ async function startServer() {
       const { data: acceptedOrders } = await supabase
         .from("orders")
         .select("id, total_amount, created_at, order_items(price_at_purchase, quantity, products(price, external_id))")
-        .eq("status", "accepted")
+        .eq("status", "completed")
         .gte("created_at", fromIso)
         .lte("created_at", toIso);
 
@@ -2525,7 +2525,7 @@ async function startServer() {
       const { count: rejectedCount } = await supabase
         .from("orders")
         .select("id", { count: "exact", head: true })
-        .eq("status", "rejected")
+        .in("status", ["rejected","failed","cancelled"])
         .gte("created_at", fromIso)
         .lte("created_at", toIso);
 
@@ -2540,24 +2540,31 @@ async function startServer() {
       const grossRevenue = (acceptedOrders || []).reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0);
       const totalPayments = (payments || []).reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
 
-      // حساب تكلفة API من سعر المنتج الأصلي (price_at_purchase = سعر البيع، نفترض ربح = إيراد - تكلفة API)
-      // نجلب سعر API من بيانات المنتج (products.price = سعر التكلفة من الـ API)
+      // تكلفة API = products.price (سعر الشراء من الـ API) × الكمية
+      // سعر البيع = price_at_purchase × الكمية
+      // الربح = إجمالي البيع - إجمالي التكلفة
       let apiCost = 0;
+      let totalSell = 0;
       for (const order of (acceptedOrders || [])) {
         for (const item of (order.order_items || [])) {
-          const productApiPrice = item.products?.price || 0;
-          apiCost += productApiPrice * (item.quantity || 1);
+          const qty = item.quantity || 1;
+          const costPrice = item.products?.price || 0;          // سعر الشراء من API
+          const sellPrice = item.price_at_purchase || 0;        // سعر البيع للعميل
+          apiCost  += costPrice * qty;
+          totalSell += sellPrice * qty;
         }
       }
+      // إذا لم تكن هناك بيانات price_at_purchase نستخدم total_amount
+      if (totalSell === 0) totalSell = grossRevenue;
 
-      const profit = grossRevenue - apiCost;
-      const profitMargin = grossRevenue > 0 ? (profit / grossRevenue) * 100 : 0;
+      const profit = totalSell - apiCost;
+      const profitMargin = totalSell > 0 ? (profit / totalSell) * 100 : 0;
 
       res.json({
         accepted_orders: (acceptedOrders || []).length,
         rejected_orders: rejectedCount || 0,
         total_payments: totalPayments,
-        gross_revenue: grossRevenue,
+        gross_revenue: totalSell,
         api_cost: apiCost,
         profit,
         profit_margin: profitMargin,
