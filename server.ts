@@ -447,8 +447,8 @@ async function ahminixCheckOrder(orderId: string, isUuid = false): Promise<any> 
  */
 function mapAhminixStatus(apiStatus: string): "completed" | "cancelled" | "processing" {
   const s = (apiStatus || "").toLowerCase().trim();
-  if (s === "accept" || s === "completed") return "completed";
-  if (s === "reject" || s === "rejected" || s === "cancelled") return "cancelled";
+  if (["accept","accepted","completed","done","success","successful","approved","finish","finished","delivered","complete"].includes(s)) return "completed";
+  if (["reject","rejected","cancelled","canceled","failed","fail","declined","denied","refused"].includes(s)) return "cancelled";
   return "processing";
 }
 
@@ -457,7 +457,7 @@ function mapAhminixStatus(apiStatus: string): "completed" | "cancelled" | "proce
  */
 function isAhminixFinalStatus(apiStatus: string): boolean {
   const s = (apiStatus || "").toLowerCase().trim();
-  return s === "accept" || s === "completed" || s === "reject" || s === "rejected" || s === "cancelled";
+  return ["accept","accepted","completed","done","success","successful","approved","finish","finished","delivered","complete","reject","rejected","cancelled","canceled","failed","fail","declined","denied","refused"].includes(s);
 }
 
 /**
@@ -2723,13 +2723,14 @@ async function startServer() {
             ahminix_replay: apiRes.data?.replay_api || [],
             admin_approved_at: new Date().toISOString()
           };
-          // processing → قيد المعالجة | accept → مكتمل | غير ذلك → فشل
-          if (apiStatus === 'processing') {
-            finalStatus = 'processing';
-          } else if (apiStatus === 'accept') {
+          // استخدام mapAhminixStatus لتغطية كل الحالات: accept/completed/done/success → completed
+          const mappedStatus = mapAhminixStatus(apiStatus || '');
+          if (mappedStatus === 'completed') {
             finalStatus = 'completed';
-          } else {
+          } else if (mappedStatus === 'cancelled') {
             finalStatus = 'failed';
+          } else {
+            finalStatus = 'processing';
           }
         } else {
           // منتج عادي تمت الموافقة عليه
