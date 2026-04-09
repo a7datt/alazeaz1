@@ -2516,7 +2516,7 @@ async function startServer() {
       // جلب الطلبات المقبولة مع تفاصيل المنتجات
       const { data: acceptedOrders } = await supabase
         .from("orders")
-        .select("id, total_amount, created_at, order_items(price_at_purchase, quantity, products(price, external_id))")
+        .select("id, total_amount, created_at, order_items(price_at_purchase, quantity, products(price, price_per_unit, external_id))")
         .eq("status", "completed")
         .gte("created_at", fromIso)
         .lte("created_at", toIso);
@@ -2548,13 +2548,12 @@ async function startServer() {
       for (const order of (acceptedOrders || [])) {
         for (const item of (order.order_items || [])) {
           const qty = item.quantity || 1;
-          const costPrice = item.products?.price || 0;          // سعر الشراء من API
-          const sellPrice = item.price_at_purchase || 0;        // سعر البيع للعميل
+          const costPrice = item.products?.price_per_unit || item.products?.price || 0; // سعر التكلفة من API
+          const sellPrice = item.price_at_purchase || item.products?.price || 0;        // سعر البيع للعميل
           apiCost  += costPrice * qty;
           totalSell += sellPrice * qty;
         }
       }
-      // إذا لم تكن هناك بيانات price_at_purchase نستخدم total_amount
       if (totalSell === 0) totalSell = grossRevenue;
 
       const profit = totalSell - apiCost;
