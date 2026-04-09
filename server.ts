@@ -443,12 +443,46 @@ async function ahminixCheckOrder(orderId: string, isUuid = false): Promise<any> 
 
 /**
  * يُحوّل حالة Ahminix الخام إلى حالة داخلية
- * API قد يُرجع: "accept"/"completed" → completed | "reject"/"rejected"/"cancelled" → cancelled | غير ذلك → processing
+ * نعتمد قائمة واسعة من الكلمات، لكن أي حالة غير مؤكدة تبقى processing
  */
+const AHMINIX_ACCEPT_STATUS_WORDS = [
+  "accept", "accepted", "accepts", "approved", "approve", "completed", "complete", "completion",
+  "done", "success", "successful", "succeeded", "finish", "finished", "delivered", "delivered_successfully"
+];
+
+const AHMINIX_REJECT_STATUS_WORDS = [
+  "reject", "rejected", "rejects", "declined", "denied", "refused", "cancel", "cancelled", "canceled",
+  "failed", "failure", "fail", "aborted", "terminated", "void", "not_approved", "invalid", "blocked"
+];
+
+function normalizeAhminixStatusValue(apiStatus: any): string {
+  return String(apiStatus ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function statusMatchesAny(apiStatus: any, words: string[]): boolean {
+  const s = normalizeAhminixStatusValue(apiStatus);
+  if (!s) return false;
+  return words.some((word) => {
+    const w = normalizeAhminixStatusValue(word);
+    return s === w || s.startsWith(`${w}_`) || s.endsWith(`_${w}`) || s.includes(`_${w}_`);
+  });
+}
+
+function isAhminixAcceptedStatus(apiStatus: any): boolean {
+  return statusMatchesAny(apiStatus, AHMINIX_ACCEPT_STATUS_WORDS);
+}
+
+function isAhminixRejectedStatus(apiStatus: any): boolean {
+  return statusMatchesAny(apiStatus, AHMINIX_REJECT_STATUS_WORDS);
+}
+
 function mapAhminixStatus(apiStatus: string): "completed" | "cancelled" | "processing" {
-  const s = (apiStatus || "").toLowerCase().trim();
-  if (["accept","accepted","completed","done","success","successful","approved","finish","finished","delivered","complete"].includes(s)) return "completed";
-  if (["reject","rejected","cancelled","canceled","failed","fail","declined","denied","refused"].includes(s)) return "cancelled";
+  if (isAhminixAcceptedStatus(apiStatus)) return "completed";
+  if (isAhminixRejectedStatus(apiStatus)) return "cancelled";
   return "processing";
 }
 
@@ -456,8 +490,33 @@ function mapAhminixStatus(apiStatus: string): "completed" | "cancelled" | "proce
  * هل الحالة الخام نهائية (مكتملة أو مرفوضة)؟
  */
 function isAhminixFinalStatus(apiStatus: string): boolean {
-  const s = (apiStatus || "").toLowerCase().trim();
-  return ["accept","accepted","completed","done","success","successful","approved","finish","finished","delivered","complete","reject","rejected","cancelled","canceled","failed","fail","declined","denied","refused"].includes(s);
+  return isAhminixAcceptedStatus(apiStatus) || isAhminixRejectedStatus(apiStatus);
+}
+
+async function fetchAhminixOrderSnapshot(ahminixId?: string | null, ahminixUuid?: string | null): Promise<any | null> {
+  let checkRes: any = null;
+  if (ahminixUuid && ahminixUuid !== String(ahminixId || "")) {
+    checkRes = await ahminixCheckOrder(ahminixUuid, true);
+    if (checkRes?.status !== "OK" || !checkRes?.data?.[0]) checkRes = null;
+  }
+  if (!checkRes && ahminixId) {
+    const isUuid = String(ahminixId).includes("-");
+    checkRes = await ahminixCheckOrder(ahminixId, isUuid);
+    if (checkRes?.status !== "OK" || !checkRes?.data?.[0]) checkRes = null;
+  }
+  return checkRes?.data?.[0] || null;
+}
+
+async function confirmAhminixRejectedStatus(ahminixId?: string | null, ahminixUuid?: string | null): Promise<any | null> {
+  const first = await fetchAhminixOrderSnapshot(ahminixId, ahminixUuid);
+  if (!first) return null;
+  if (!isAhminixRejectedStatus(first.status)) return first;
+
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+
+  const second = await fetchAhminixOrderSnapshot(ahminixId, ahminixUuid);
+  if (!second) return null;
+  return isAhminixRejectedStatus(second.status) ? second : null;
 }
 
 /**
@@ -1236,12 +1295,18 @@ async function startServer() {
       // تحديد حالة الطلب بناءً على الوضع والنتيجة
       let initialStatus: string;
       if (hasExternalId && orderMode === 'auto') {
-        if (ahminixOrderStatus === 'processing') {
-          initialStatus = 'processing';
-        } else if (ahminixOrderStatus === 'accept') {
+        if (isAhminixAcceptedStatus(ahminixOrderStatus)) {
           initialStatus = 'completed';
         } else {
-          initialStatus = 'failed';
+          const confirmedRejected = await confirmAhminixRejectedStatus(ahminixOrderId, ahminixOrderUuid);
+          if (confirmedRejected) {
+            ahminixOrderStatus = confirmedRejected.status || ahminixOrderStatus;
+            ahminixReplayApi = normalizeReplayApi(confirmedRejected.replay_api);
+            initialStatus = 'failed';
+          } else {
+            ahminixOrderStatus = 'processing';
+            initialStatus = 'processing';
+          }
         }
       } else if (hasExternalId && orderMode === 'manual') {
         initialStatus = 'pending_admin';
@@ -1302,7 +1367,7 @@ async function startServer() {
       }
 
       // إشعار فوري للمستخدم إذا تم قبول الطلب لحظياً
-      if (ahminixOrderStatus === 'accept' && ahminixReplayApi?.length > 0) {
+      if (isAhminixAcceptedStatus(ahminixOrderStatus) && ahminixReplayApi?.length > 0) {
         const { data: userTg } = await supabase.from("users").select("telegram_chat_id").eq("id", userId).single();
         if (userTg?.telegram_chat_id && userBot) {
           const codes = ahminixReplayApi.filter(Boolean);
@@ -1320,7 +1385,9 @@ async function startServer() {
         pendingAdmin: initialStatus === 'pending_admin',
         ...(ahminixOrderId ? {
           externalOrderId: ahminixOrderId,
-          externalStatus: ahminixOrderStatus,
+          externalStatus: isAhminixAcceptedStatus(ahminixOrderStatus)
+            ? (ahminixOrderStatus || 'completed')
+            : (initialStatus === 'failed' ? (ahminixOrderStatus || 'rejected') : 'processing'),
           replayApi: ahminixReplayApi
         } : {})
       });
@@ -1358,25 +1425,13 @@ async function startServer() {
       const ahminixId   = meta.ahminix_order_id;
       const ahminixUuid = meta.ahminix_order_uuid;
 
-      // نحاول بالـ UUID أولاً ثم الـ numeric ID
-      let checkRes: any = null;
-      if (ahminixUuid && ahminixUuid !== ahminixId) {
-        checkRes = await ahminixCheckOrder(ahminixUuid, true);
-        if (checkRes?.status !== "OK" || !checkRes?.data?.[0]) checkRes = null;
-      }
-      if (!checkRes && ahminixId) {
-        const isUuid = String(ahminixId).includes("-");
-        checkRes = await ahminixCheckOrder(ahminixId, isUuid);
-      }
+      const ext = await fetchAhminixOrderSnapshot(ahminixId, ahminixUuid);
+      if (!ext) return res.json({ status: "processing", replay_api: [] });
 
-      if (!checkRes?.data?.[0]) return res.json({ status: "processing", replay_api: [] });
-
-      const ext = checkRes.data[0];
       const normalizedReplay = normalizeReplayApi(ext.replay_api);
 
-      // إذا اكتمل → حدّث قاعدة البيانات
-      if (isAhminixFinalStatus(ext.status)) {
-        const newStatus = mapAhminixStatus(ext.status);
+      // إذا اكتمل أو تأكد الرفض → حدّث قاعدة البيانات
+      if (isAhminixAcceptedStatus(ext.status)) {
         const updatedMeta = {
           ...meta,
           ahminix_status: ext.status,
@@ -1384,30 +1439,53 @@ async function startServer() {
           completed_at: new Date().toISOString()
         };
         await supabase.from("orders").update({
-          status: newStatus,
+          status: "completed",
           meta: JSON.stringify(updatedMeta)
         }).eq("id", matchOrder.id);
 
-        if (newStatus === "cancelled") {
+        const notifTitle = "✅ تم تنفيذ طلبك!";
+        const notifBody = `تم تنفيذ طلب ${meta?.product_name || ""} بنجاح`;
+        await sendPushNotification(String(userId), notifTitle, notifBody, "/");
+        await supabase.from("notifications").insert({
+          user_id: userId, title: notifTitle, message: notifBody,
+          type: "success"
+        });
+      } else {
+        const confirmedRejected = isAhminixRejectedStatus(ext.status)
+          ? await confirmAhminixRejectedStatus(ahminixId, ahminixUuid)
+          : null;
+
+        if (confirmedRejected) {
+          const confirmedReplay = normalizeReplayApi(confirmedRejected.replay_api);
+          const updatedMeta = {
+            ...meta,
+            ahminix_status: confirmedRejected.status,
+            ahminix_replay: confirmedReplay,
+            completed_at: new Date().toISOString()
+          };
+          await supabase.from("orders").update({
+            status: "cancelled",
+            meta: JSON.stringify(updatedMeta)
+          }).eq("id", matchOrder.id);
+
           await supabase.rpc("increment_balance", {
             user_id_param: userId,
             amount_param: matchOrder.total_amount
           });
-        }
 
-        // إشعار push للمستخدم
-        const notifTitle = newStatus === "completed" ? "✅ تم تنفيذ طلبك!" : "❌ تم إلغاء طلبك";
-        const notifBody = newStatus === "completed"
-          ? `تم تنفيذ طلب ${meta?.product_name || ""} بنجاح`
-          : `تم إلغاء الطلب وإعادة رصيدك`;
-        await sendPushNotification(String(userId), notifTitle, notifBody, "/");
-        await supabase.from("notifications").insert({
-          user_id: userId, title: notifTitle, message: notifBody,
-          type: newStatus === "completed" ? "success" : "warning"
-        });
+          const notifTitle = "❌ تم إلغاء طلبك";
+          const notifBody = `تم إلغاء الطلب وإعادة رصيدك`;
+          await sendPushNotification(String(userId), notifTitle, notifBody, "/");
+          await supabase.from("notifications").insert({
+            user_id: userId, title: notifTitle, message: notifBody,
+            type: "warning"
+          });
+
+          return res.json({ status: confirmedRejected.status, replay_api: confirmedReplay });
+        }
       }
 
-      res.json({ status: ext.status, replay_api: normalizedReplay });
+      res.json({ status: isAhminixAcceptedStatus(ext.status) ? ext.status : "processing", replay_api: normalizedReplay });
     } catch (e: any) {
       safeError(res, e);
     }
@@ -1720,22 +1798,18 @@ async function startServer() {
       const ahminixUuid = meta?.ahminix_order_uuid;
       if (!ahminixId && !ahminixUuid) return res.status(400).json({ error: "الطلب ليس خارجياً" });
 
-      let checkRes: any = null;
-      if (ahminixUuid && ahminixUuid !== String(ahminixId)) {
-        checkRes = await ahminixCheckOrder(ahminixUuid, true);
-        if (checkRes?.status !== "OK" || !checkRes?.data?.[0]) checkRes = null;
-      }
-      if (!checkRes && ahminixId) {
-        const isUuid = String(ahminixId).includes("-");
-        checkRes = await ahminixCheckOrder(ahminixId, isUuid);
-      }
-      if (!checkRes?.data?.[0]) return res.json({ status: "OK", message: "لا استجابة من API", raw: checkRes });
+      const ext = await fetchAhminixOrderSnapshot(ahminixId, ahminixUuid);
+      if (!ext) return res.json({ status: "OK", message: "لا استجابة من API", raw: null });
 
-      const ext = checkRes.data[0];
       const normalizedReplay = normalizeReplayApi(ext.replay_api);
-      const newStatus = mapAhminixStatus(ext.status);
+      const newStatus = isAhminixAcceptedStatus(ext.status)
+        ? "completed"
+        : isAhminixRejectedStatus(ext.status)
+          ? ((await confirmAhminixRejectedStatus(ahminixId, ahminixUuid)) ? "cancelled" : "processing")
+          : "processing";
 
-      const updatedMeta = { ...meta, ahminix_status: ext.status, ahminix_replay: normalizedReplay, synced_at: new Date().toISOString() };
+      const finalExtStatus = newStatus === "processing" ? "processing" : ext.status;
+      const updatedMeta = { ...meta, ahminix_status: finalExtStatus, ahminix_replay: normalizedReplay, synced_at: new Date().toISOString() };
       await supabase.from("orders").update({ status: newStatus, meta: JSON.stringify(updatedMeta) }).eq("id", order.id);
 
       if (newStatus === "cancelled" && order.status !== "cancelled") {
@@ -1743,11 +1817,11 @@ async function startServer() {
       }
       if (order.user_id && newStatus !== order.status) {
         const notifTitle = newStatus === "completed" ? "✅ تم تنفيذ طلبك!" : newStatus === "cancelled" ? "❌ تم إلغاء طلبك" : "🔄 تحديث طلبك";
-        const notifBody = newStatus === "completed" ? `تم تنفيذ طلب ${meta?.product_name || ""} بنجاح` : `تم إلغاء طلب ${meta?.product_name || ""} وإعادة رصيدك`;
+        const notifBody = newStatus === "completed" ? `تم تنفيذ طلب ${meta?.product_name || ""} بنجاح` : newStatus === "cancelled" ? `تم إلغاء طلب ${meta?.product_name || ""} وإعادة رصيدك` : `تم تحديث حالة طلب ${meta?.product_name || ""}`;
         await supabase.from("notifications").insert({ user_id: order.user_id, title: notifTitle, message: notifBody, type: newStatus === "completed" ? "success" : "warning" });
       }
 
-      res.json({ status: "OK", oldStatus: order.status, newStatus, ahminixStatus: ext.status, replay: normalizedReplay });
+      res.json({ status: "OK", oldStatus: order.status, newStatus, ahminixStatus: finalExtStatus, replay: normalizedReplay });
     } catch (e: any) {
       safeError(res, e);
     }
@@ -2729,11 +2803,10 @@ async function startServer() {
             ahminix_replay: apiRes.data?.replay_api || [],
             admin_approved_at: new Date().toISOString()
           };
-          // استخدام mapAhminixStatus لتغطية كل الحالات: accept/completed/done/success → completed
-          const mappedStatus = mapAhminixStatus(apiStatus || '');
-          if (mappedStatus === 'completed') {
+          // استخدام الكلمات المؤكدة فقط: المقبول → completed، والمرفوض المؤكد فقط → failed
+          if (isAhminixAcceptedStatus(apiStatus || '')) {
             finalStatus = 'completed';
-          } else if (mappedStatus === 'cancelled') {
+          } else if (isAhminixRejectedStatus(apiStatus || '')) {
             finalStatus = 'failed';
           } else {
             finalStatus = 'processing';
@@ -3580,23 +3653,14 @@ async function startServer() {
           const ahminixUuid = meta?.ahminix_order_uuid;
           if (!ahminixId && !ahminixUuid) continue;
 
-          // نحاول بالـ UUID أولاً (أكثر موثوقية)، ثم بالـ numeric ID
-          let checkRes: any = null;
-          if (ahminixUuid && ahminixUuid !== String(ahminixId)) {
-            checkRes = await ahminixCheckOrder(ahminixUuid, true);
-            if (checkRes?.status !== "OK" || !checkRes?.data?.[0]) {
-              checkRes = null;
-            }
-          }
-          if (!checkRes && ahminixId) {
-            const isUuid = String(ahminixId).includes("-");
-            checkRes = await ahminixCheckOrder(ahminixId, isUuid);
-          }
+          const ext = await fetchAhminixOrderSnapshot(ahminixId, ahminixUuid);
+          if (!ext) continue;
 
-          if (checkRes?.status !== "OK" || !checkRes?.data?.[0]) continue;
-
-          const ext = checkRes.data[0];
-          const newStatus = mapAhminixStatus(ext.status);
+          const newStatus = isAhminixAcceptedStatus(ext.status)
+            ? "completed"
+            : isAhminixRejectedStatus(ext.status)
+              ? ((await confirmAhminixRejectedStatus(ahminixId, ahminixUuid)) ? "cancelled" : "processing")
+              : "processing";
 
           // إذا لا يزال في معالجة ولم يتغير → تخطَّ
           const currentIsProcessing = ["processing", "pending"].includes(order.status);
@@ -3608,7 +3672,7 @@ async function startServer() {
           if (newStatus !== order.status) {
             const updatedMeta = {
               ...meta,
-              ahminix_status: ext.status,
+              ahminix_status: newStatus === "processing" ? "processing" : ext.status,
               ahminix_replay: normalizedReplay,
               completed_at: new Date().toISOString()
             };
