@@ -2614,17 +2614,22 @@ async function startServer() {
       const grossRevenue = (acceptedOrders || []).reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0);
       const totalPayments = (payments || []).reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
 
-      // تكلفة API = products.price (سعر الشراء من الـ API) × الكمية
-      // سعر البيع = price_at_purchase × الكمية
-      // الربح = إجمالي البيع - إجمالي التكلفة
+      // سعر البيع = price_at_purchase (ما دفعه المستخدم)
+      // سعر التكلفة = api_cost_price المحفوظ في order meta (إن وجد)، أو صفر للمنتجات اليدوية
+      // الربح الصافي = إجمالي البيع - إجمالي التكلفة
       let apiCost = 0;
       let totalSell = 0;
       for (const order of (acceptedOrders || [])) {
         for (const item of (order.order_items || [])) {
           const qty = item.quantity || 1;
-          const costPrice = item.products?.price_per_unit || item.products?.price || 0; // سعر التكلفة من API
-          const sellPrice = item.price_at_purchase || item.products?.price || 0;        // سعر البيع للعميل
-          apiCost  += costPrice * qty;
+          const sellPrice = item.price_at_purchase || item.products?.price || 0; // سعر البيع للعميل
+          // سعر التكلفة: نجلبه من meta الطلب (ahminix_cost) أو من products.api_cost_price إن وجد
+          let metaOrder: any = {};
+          try { metaOrder = JSON.parse((order as any).meta || "{}"); } catch {}
+          const costPrice = metaOrder?.ahminix_cost_price ||
+                            item.products?.api_cost_price ||
+                            (item.products?.external_id ? 0 : 0); // للمنتجات اليدوية التكلفة صفر
+          apiCost  += Number(costPrice) * qty;
           totalSell += sellPrice * qty;
         }
       }
@@ -2717,7 +2722,7 @@ async function startServer() {
         .from("orders")
         .select(`
           *,
-          users(name, email),
+          users(id, name, email, phone, avatar_url),
           order_items(
             *,
             products(
@@ -2738,6 +2743,10 @@ async function startServer() {
         return {
           ...order,
           user_name: order.users?.name || "مستخدم محذوف",
+          user_email: order.users?.email || null,
+          user_phone: order.users?.phone || null,
+          user_avatar: order.users?.avatar_url || null,
+          user_login_id: order.users?.id || null,
           product_name: product?.name || "منتج محذوف",
           category_name: product?.subcategories?.categories?.name || null,
           subcategory_name: product?.subcategories?.name || null,
@@ -2783,8 +2792,21 @@ async function startServer() {
           if (!AHMINIX_TOKEN) {
             return res.status(500).json({ error: "AHMINIX_API_TOKEN غير مضبوط" });
           }
-          const playerId = metaParsed?.playerId || metaParsed?.input || "";
-          const qty = order.order_items?.[0]?.quantity || 1;
+          // دعم override_player_id من الأدمن، وإلا نستخدم البيانات المحفوظة بالطلب
+          const overridePlayerId = req.body?.override_player_id;
+          const playerId = (
+            (overridePlayerId !== undefined && overridePlayerId !== null && String(overridePlayerId).trim() !== "")
+              ? String(overridePlayerId).trim()
+              : (
+                  metaParsed?.playerId ||
+                  metaParsed?.input ||
+                  metaParsed?.userId ||
+                  metaParsed?.gameId ||
+                  metaParsed?.accountId ||
+                  ""
+                )
+          );
+          const qty = Math.max(1, Number(order.order_items?.[0]?.quantity) || 1);
           const orderUuid = `vipronea-admin-${order.id}-${Date.now()}`;
 
           console.log(`[API] Admin approved order #${order.id} - sending to API`);
@@ -2820,11 +2842,27 @@ async function startServer() {
       // إذا كان الأدمن يرفض طلب
       if (status === 'rejected') {
         finalStatus = 'failed';
-        // إعادة الرصيد للمستخدم
-        const { data: userBalance } = await supabase.from("users").select("balance").eq("id", order.user_id).single();
-        if (userBalance) {
-          await supabase.from("users").update({ balance: userBalance.balance + order.total_amount }).eq("id", order.user_id);
-          updatedMeta = { ...updatedMeta, refunded: true, refunded_at: new Date().toISOString() };
+        // إعادة الرصيد للمستخدم فقط إذا لم يتم استرداده مسبقاً
+        if (!metaParsed?.refunded) {
+          const { data: userBalance } = await supabase.from("users").select("balance").eq("id", order.user_id).single();
+          if (userBalance) {
+            await supabase.from("users").update({ balance: userBalance.balance + order.total_amount }).eq("id", order.user_id);
+            updatedMeta = { ...updatedMeta, refunded: true, refunded_at: new Date().toISOString() };
+          }
+        }
+      }
+
+      // تعديل مباشر على الحالة (للأدمن فقط) — يسمح بتغيير المكتمل والمرفوض
+      if (status === 'set_completed') {
+        finalStatus = 'completed';
+      } else if (status === 'set_failed') {
+        finalStatus = 'failed';
+        if (!metaParsed?.refunded) {
+          const { data: ub } = await supabase.from("users").select("balance").eq("id", order.user_id).single();
+          if (ub) {
+            await supabase.from("users").update({ balance: ub.balance + order.total_amount }).eq("id", order.user_id);
+            updatedMeta = { ...updatedMeta, refunded: true, refunded_at: new Date().toISOString() };
+          }
         }
       }
 
@@ -2856,9 +2894,19 @@ async function startServer() {
 
   app.get("/api/admin/transactions", async (req, res) => {
     try {
-      const { data, error } = await supabase.from("transactions").select("*, users(name), payment_methods(name)").order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("transactions").select("*, users(id, name, email, phone, avatar_url), payment_methods(id, name, method_type)").order("created_at", { ascending: false });
       if (error) throw error;
-      res.json(Array.isArray(data) ? data : []);
+      const enrichedTx = (data || []).map((t: any) => ({
+        ...t,
+        user_name: t.users?.name || "مستخدم محذوف",
+        user_email: t.users?.email || null,
+        user_phone: t.users?.phone || null,
+        user_avatar: t.users?.avatar_url || null,
+        user_login_id: t.users?.id || null,
+        payment_method_name: t.payment_methods?.name || t.payment_method_name || null,
+        payment_method_type: t.payment_methods?.method_type || null,
+      }));
+      res.json(enrichedTx);
     } catch (e: any) {
       safeError(res, e);
     }
@@ -2870,19 +2918,25 @@ async function startServer() {
       if (txErr || !tx) return res.status(404).json({ error: "Transaction not found" });
       if (tx.status !== "pending") return res.status(400).json({ error: "Invalid transaction" });
 
-      await supabase.from("transactions").update({ status: "approved" }).eq("id", req.params.id);
-      await supabase.rpc("increment_balance", { user_id_param: tx.user_id, amount_param: tx.amount });
-      await supabase.from("user_stats").update({ total_recharge_sum: tx.amount }).eq("user_id", tx.user_id);
+      // دعم تغيير المبلغ من قِبل الأدمن
+      const overrideAmount = req.body?.override_amount;
+      const finalAmount = (overrideAmount !== undefined && overrideAmount !== null && !isNaN(parseFloat(overrideAmount)) && parseFloat(overrideAmount) > 0)
+        ? parseFloat(overrideAmount)
+        : tx.amount;
+
+      await supabase.from("transactions").update({ status: "approved", amount: finalAmount }).eq("id", req.params.id);
+      await supabase.rpc("increment_balance", { user_id_param: tx.user_id, amount_param: finalAmount });
+      await supabase.from("user_stats").update({ total_recharge_sum: finalAmount }).eq("user_id", tx.user_id);
 
       await supabase.from("notifications").insert({
         user_id: tx.user_id,
         title: "تم قبول الشحن",
-        message: `تمت إضافة ${tx.amount}$ إلى رصيدك بنجاح.`,
+        message: `تمت إضافة ${finalAmount}$ إلى رصيدك بنجاح.`,
         type: "success"
       });
 
-      sendTelegramToUser(tx.user_id, `✅ تم قبول طلب الشحن الخاص بك! تم إضافة ${tx.amount}$ لرصيدك.`);
-      res.json({ success: true });
+      sendTelegramToUser(tx.user_id, `✅ تم قبول طلب الشحن الخاص بك! تم إضافة ${finalAmount}$ لرصيدك.`);
+      res.json({ success: true, finalAmount });
     } catch (e: any) {
       safeError(res, e);
     }
@@ -2893,6 +2947,7 @@ async function startServer() {
       const { reason } = req.body;
       const { data: tx, error: txErr } = await supabase.from("transactions").select("*").eq("id", req.params.id).single();
       if (txErr || !tx) return res.status(404).json({ error: "Transaction not found" });
+      if (tx.status !== "pending") return res.status(400).json({ error: "لا يمكن رفض هذه الدفعة — ليست في حالة انتظار" });
 
       await supabase.from("transactions").update({
         status: "rejected",
