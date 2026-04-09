@@ -1,135 +1,72 @@
-<div align="center">
+<div align="center"><img src="https://via.placeholder.com/120x120/0A1F44/FFFFFF?text=SYB" />🚀 SYB Company
 
-# 🌐 فيبرو — vipro
+<img src="https://readme-typing-svg.herokuapp.com?font=Fira+Code&size=28&duration=3000&pause=1000&color=0A66C2&center=true&vCenter=true&width=600&lines=SYB+Company;Premium+Digital+Solutions;Built+with+Innovation" />---
 
-**منصة تصميم احترافية متكاملة**
+🌌 Premium Digital Experience
 
-[![Designer](https://img.shields.io/badge/Designer-Ahmed%20Attoun-blueviolet?style=for-the-badge&logo=figma)](mailto:a7datt@gmail.com)
-[![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=for-the-badge)]()
-[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)]()
+<img src="https://img.shields.io/badge/Status-Active-0A66C2?style=for-the-badge&logo=github&logoColor=white" />
+<img src="https://img.shields.io/badge/Company-SYB-001F3F?style=for-the-badge" />
+<img src="https://img.shields.io/badge/Theme-Dark%20Blue-0A1F44?style=for-the-badge" /></div>---
 
-</div>
+🏢 About SYB
 
----
-
-## 📌 نظرة عامة | Overview
-
-**فيبرو (vipro)** هو موقع ويب احترافي يقدم خدمات التصميم الإبداعي بأعلى مستوى من الجودة والاحترافية. تم تصميمه وتطويره بعناية فائقة لتوفير تجربة مستخدم استثنائية.
-
-> Fibro is a professional creative design platform built with a focus on quality, performance, and modern user experience.
+«SYB is a high-end digital company delivering modern, scalable, and elegant solutions.
+We build powerful digital experiences with performance and innovation.»
 
 ---
 
-## 👨‍🎨 معلومات الفريق | Team
+⚡ Services
 
-| الدور | الاسم | التواصل |
-|-------|-------|---------|
-| 🎨 المصمم / Designer | **أحمد عتون** | [![Email](https://img.shields.io/badge/Email-a7datt%40gmail.com-red?style=flat&logo=gmail)](mailto:a7datt@gmail.com) |
-| 💻 المطور / Developer | — | [![Phone](https://img.shields.io/badge/Phone-%2B963982559890-green?style=flat&logo=whatsapp)](tel:+963982559890) |
-
----
-
-## 🚀 تشغيل المشروع محلياً | Run Locally
-
-### المتطلبات الأساسية | Prerequisites
-
-قبل البدء، تأكد من تثبيت:
-
-- ![Node.js](https://img.shields.io/badge/Node.js-v18%2B-339933?style=flat&logo=nodedotjs&logoColor=white) — **مطلوب / Required**
-- ![npm](https://img.shields.io/badge/npm-latest-CB3837?style=flat&logo=npm&logoColor=white)
++ 💻 Advanced Web Development
++ 📱 Mobile Applications (iOS & Android)
++ 🎨 UI/UX Design (Premium Interfaces)
++ ⚙️ Custom Software Systems
++ ☁️ Cloud & DevOps
 
 ---
 
-### 📦 خطوات التثبيت | Installation Steps
+🎨 Brand Identity
 
-**1. استنساخ المشروع | Clone the repository**
+<div align="center">Element| Color
+Primary| #0A1F44
+Secondary| #0A66C2
+Accent| #1E90FF
+Background| #020617
+Text| #E6EDF3
 
-```bash
-git clone https://github.com/your-username/fibro.git
-cd fibro
-```
+</div>---
 
-**2. تثبيت الحزم | Install dependencies**
+🚀 Tech Stack
 
-```bash
-npm install
-```
+<div align="center"><img src="https://skillicons.dev/icons?i=react,nodejs,python,docker,aws,figma,js,css,html" /></div>---
 
-**3. إعداد المتغيرات البيئية | Configure environment variables**
+📊 GitHub Stats
 
-أنشئ ملف `.env.local` في المجلد الجذري وأضف المتغيرات المطلوبة:
+<div align="center"><img src="https://github-readme-stats.vercel.app/api?username=YOUR_USERNAME&show_icons=true&theme=tokyonight&bg_color=020617&title_color=0A66C2&icon_color=1E90FF&text_color=E6EDF3" height="150" /><img src="https://github-readme-streak-stats.herokuapp.com/?user=YOUR_USERNAME&theme=tokyonight&background=020617&ring=0A66C2&fire=1E90FF&currStreakLabel=E6EDF3" height="150"/></div>---
 
-```env
-# .env.local
-API_KEY=your_api_key_here
-```
+🌍 Contact
 
-**4. تشغيل بيئة التطوير | Start development server**
+<div align="center">📱 Phone: +212 773-963897
+📧 Email: null
+🌐 Website:null
 
-```bash
-npm run dev
-```
+</div>---
 
-**5. فتح المتصفح | Open in browser**
+💎 Why SYB?
 
-```
-http://localhost:3000
-```
+- 🔵 Clean & Professional Design
+- 🔵 High Performance
+- 🔵 Secure Systems
+- 🔵 Modern Stack
 
 ---
 
-## 📁 هيكل المشروع | Project Structure
+⭐ Support
 
-```
-fibro/
-├── 📂 public/          # الملفات العامة والأصول الثابتة
-├── 📂 src/
-│   ├── 📂 components/  # مكونات قابلة لإعادة الاستخدام
-│   ├── 📂 pages/       # صفحات الموقع
-│   ├── 📂 styles/      # ملفات التنسيق
-│   └── 📂 utils/       # دوال مساعدة
-├── 📄 .env.local       # متغيرات البيئة (غير مرفوع)
-├── 📄 package.json
-└── 📄 README.md
-```
+Give us a ⭐ and follow our journey 🚀
 
 ---
 
-## 🛠️ التقنيات المستخدمة | Tech Stack
-
-| التقنية | الاستخدام |
-|---------|-----------|
-| ![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=flat&logo=html5&logoColor=white) | هيكل الصفحات |
-| ![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=flat&logo=css3&logoColor=white) | التنسيق والتصميم |
-| ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat&logo=javascript&logoColor=black) | التفاعلية |
-| ![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=nodedotjs&logoColor=white) | بيئة التشغيل |
-
----
-
-## 📜 الأوامر المتاحة | Available Scripts
-
-```bash
-npm run dev       # تشغيل بيئة التطوير
-npm run build     # بناء نسخة الإنتاج
-npm run start     # تشغيل نسخة الإنتاج
-npm run lint      # فحص جودة الكود
-```
-
----
-
-## 📬 التواصل | Contact
-
-هل لديك استفسار أو تريد التعاون؟ تواصل معنا:
-
-- 📧 **البريد الإلكتروني:** [a7datt@gmail.com](mailto:a7datt@gmail.com)
-- 📱 **هاتف المطور:** [+963 982 559 890](tel:+963982559890)
-
----
-
-<div align="center">
-
-صُنع بـ ❤️ من قِبَل فريق **a7d احمد عتون**
-
-© 2025 a7d_at — جميع الحقوق محفوظة
+<div align="center">🌌 SYB — Powered by Innovation
 
 </div>
