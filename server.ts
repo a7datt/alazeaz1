@@ -1602,8 +1602,8 @@ async function startServer() {
 
           // السعر: مخصص يدوياً أو محسوب بنسبة الربح
           const finalPrice = override.price && parseFloat(override.price) > 0
-            ? parseFloat(parseFloat(override.price).toFixed(6))
-            : parseFloat((basePrice * (1 + markupPercent / 100)).toFixed(6));
+            ? parseFloat(parseFloat(override.price).toFixed(7))
+            : parseFloat((basePrice * (1 + markupPercent / 100)).toFixed(7));
 
           const { data: existing } = await supabase
             .from("products")
