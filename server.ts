@@ -39,12 +39,6 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const normalizeMoney7 = (value: any): number => {
-  const n = Number.parseFloat(String(value));
-  if (!Number.isFinite(n)) return 0;
-  return Number(n.toFixed(7));
-};
-
 // --- Web Push Configuration ---
 let vapidKeys = {
   publicKey: process.env.VAPID_PUBLIC_KEY!,
@@ -188,12 +182,11 @@ async function processBotOrder(chatId: number, user: any, product: any, price: n
       await supabase.rpc("increment_balance", { user_id_param: user.referred_by_id, amount_param: commission });
     }
 
-    const priceDigits = product.store_type === "quantities" || product.store_type === "external_api" ? 7 : 2;
-    userBot?.sendMessage(chatId, `✅ تمت عملية الشراء بنجاح!\nرقم الطلب: ${order.id}\nالمنتج: ${product.name}\nالمبلغ المخصوم: ${price.toFixed(priceDigits)}$`);
+    userBot?.sendMessage(chatId, `✅ تمت عملية الشراء بنجاح!\nرقم الطلب: ${order.id}\nالمنتج: ${product.name}\nالمبلغ المخصوم: ${price.toFixed(2)}$`);
 
     const adminChatId = process.env.TELEGRAM_CHAT_ID;
     if (adminChatId) {
-      const adminMsg = `🔔 طلب جديد من البوت #ORD${order.id}\nالاسم: ${user.name}\nProduct: ${product.name}\nTotal: ${price.toFixed(priceDigits)}`;
+      const adminMsg = `🔔 طلب جديد من البوت #ORD${order.id}\nالاسم: ${user.name}\nProduct: ${product.name}\nTotal: ${price}`;
       adminBot?.sendMessage(adminChatId, adminMsg);
     }
   } catch (e) {
@@ -1188,12 +1181,11 @@ async function startServer() {
         return res.status(403).json({ error: "حسابك موقوف" });
       }
 
-      // حساب السعر الصحيح حسب نوع المتجر
-      const unitPriceRaw = product.store_type === 'quantities' || product.store_type === 'external_api'
-        ? (parseFloat(product.price_per_unit) || parseFloat(product.price) || 0)
-        : (parseFloat(product.price) || 0);
-      const unitPrice = normalizeMoney7(unitPriceRaw);
-      let total = normalizeMoney7(unitPrice * (Number(quantity) || 1));
+      // حساب السعر الصحيح حسب نوع المتجر - الكمية × سعر الوحدة (دقة 7 خانات عشرية)
+      const unitPrice = product.store_type === 'quantities' || product.store_type === 'external_api'
+        ? (parseFloat(parseFloat(String(product.price_per_unit || product.price || 0)).toFixed(7)))
+        : (parseFloat(parseFloat(String(product.price || 0)).toFixed(7)));
+      let total = parseFloat((unitPrice * (Number(quantity) || 1)).toFixed(7));
 
       const { data: stats } = await supabase.from("user_stats").select("*").eq("user_id", userId).single();
       const { data: vipDiscountSetting } = await supabase.from("settings").select("value").eq("key", "vip_discount").single();
@@ -1214,7 +1206,7 @@ async function startServer() {
         }
       }
 
-      if (discountPercent > 0) total = normalizeMoney7(total * (1 - discountPercent / 100));
+      if (discountPercent > 0) total *= (1 - discountPercent / 100);
       if (user.balance < total) return res.status(400).json({ error: "Insufficient balance" });
 
       // =================== CHECK ORDER MODE (AUTO vs MANUAL) ===================
@@ -1608,10 +1600,10 @@ async function startServer() {
           const override = overridesMap[ap.id] || {};
           const basePrice = parseFloat(ap.price) || 0;
 
-          // السعر: مخصص يدوياً أو محسوب بنسبة الربح
+          // السعر النهائي = سعر API × (1 + نسبة الربح%) — يُخزَّن بـ 7 خانات عشرية بالضبط
           const finalPrice = override.price && parseFloat(override.price) > 0
-            ? normalizeMoney7(override.price)
-            : normalizeMoney7(basePrice * (1 + markupPercent / 100));
+            ? parseFloat(parseFloat(override.price).toFixed(7))
+            : parseFloat((basePrice * (1 + markupPercent / 100)).toFixed(7));
 
           const { data: existing } = await supabase
             .from("products")
@@ -1631,7 +1623,7 @@ async function startServer() {
             subcategory_id: subcategoryId,
             sub_sub_category_id: subSubCategoryId ? subSubCategoryId : null,
             min_quantity: ap.qty_values?.min || 1,
-max_quantity: ap.qty_values?.max || null,
+            max_quantity: ap.qty_values?.max || null,
             image_url: override.image_url || globalImageUrl || ""
           };
 
@@ -1642,7 +1634,7 @@ max_quantity: ap.qty_values?.max || null,
               price_per_unit: productData.price_per_unit,
               available: productData.available,
               min_quantity: productData.min_quantity,
-max_quantity: productData.max_quantity,
+              max_quantity: productData.max_quantity,
               subcategory_id: subcategoryId,
               sub_sub_category_id: subSubCategoryId ? subSubCategoryId : null
             };
@@ -3160,7 +3152,7 @@ max_quantity: productData.max_quantity,
       if (price_per_unit !== undefined && price_per_unit !== "" && !isValidAmount(price_per_unit, 0, 1000000)) {
         return res.status(400).json({ error: "سعر الوحدة غير صحيح" });
       }
-      const validStoreTypes = ["simple","quantities","accounts","external_api","quick_order"];
+      const validStoreTypes = ["simple","normal","quantities","accounts","external_api","quick_order","numbers"];
       if (store_type && !validStoreTypes.includes(store_type)) {
         return res.status(400).json({ error: "نوع المتجر غير صحيح" });
       }
@@ -3200,16 +3192,16 @@ max_quantity: productData.max_quantity,
 
       const insertData: any = {
         subcategory_id, sub_sub_category_id: sub_sub_category_id || null,
-        name, price: normalizeMoney7(price),
+        name, price: parseFloat(parseFloat(price || "0").toFixed(7)),
         description, image_url,
         store_type: store_type || "normal",
         requires_input: requires_input || false,
         min_quantity: min_quantity ? parseInt(min_quantity) : null,
-max_quantity: max_quantity ? parseInt(max_quantity) : null,
+        max_quantity: max_quantity ? parseInt(max_quantity) : null,
         available: available ?? true,
         external_id: external_id || null
       };
-      if (price_per_unit !== undefined) insertData.price_per_unit = normalizeMoney7(price_per_unit);
+      if (price_per_unit !== undefined) insertData.price_per_unit = parseFloat(parseFloat(String(price_per_unit) || "0").toFixed(7));
 
       const { data, error } = await supabase.from("products").insert(insertData).select().single();
       if (error) throw error;
@@ -3223,8 +3215,8 @@ max_quantity: max_quantity ? parseInt(max_quantity) : null,
     try {
       const { price, price_per_unit } = req.body;
       const updateData: any = {};
-      if (price !== undefined) updateData.price = normalizeMoney7(price);
-      if (price_per_unit !== undefined) updateData.price_per_unit = normalizeMoney7(price_per_unit);
+      if (price !== undefined) updateData.price = parseFloat(parseFloat(String(price)).toFixed(7));
+      if (price_per_unit !== undefined) updateData.price_per_unit = parseFloat(parseFloat(String(price_per_unit)).toFixed(7));
       await supabase.from("products").update(updateData).eq("id", req.params.id);
       res.json({ success: true });
     } catch (e: any) {
@@ -3242,7 +3234,7 @@ max_quantity: max_quantity ? parseInt(max_quantity) : null,
         if (allowed.includes(k)) {
           // normalize numeric fields
           if (["price","price_per_unit"].includes(k)) {
-            updateData[k] = normalizeMoney7(payload[k]);
+            updateData[k] = parseFloat(parseFloat(String(payload[k] || "0")).toFixed(7));
           } else if (k === "min_quantity") {
             updateData[k] = payload[k] !== null && payload[k] !== undefined && payload[k] !== "" ? parseInt(payload[k]) : null;
           } else if (k === "requires_input" || k === "available") {
