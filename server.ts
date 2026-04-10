@@ -1623,6 +1623,7 @@ async function startServer() {
             subcategory_id: subcategoryId,
             sub_sub_category_id: subSubCategoryId ? subSubCategoryId : null,
             min_quantity: ap.qty_values?.min || 1,
+max_quantity: ap.qty_values?.max || null,
             image_url: override.image_url || globalImageUrl || ""
           };
 
@@ -1633,6 +1634,7 @@ async function startServer() {
               price_per_unit: productData.price_per_unit,
               available: productData.available,
               min_quantity: productData.min_quantity,
+max_quantity: productData.max_quantity,
               subcategory_id: subcategoryId,
               sub_sub_category_id: subSubCategoryId ? subSubCategoryId : null
             };
@@ -3195,6 +3197,7 @@ async function startServer() {
         store_type: store_type || "normal",
         requires_input: requires_input || false,
         min_quantity: min_quantity ? parseInt(min_quantity) : null,
+max_quantity: max_quantity ? parseInt(max_quantity) : null,
         available: available ?? true,
         external_id: external_id || null
       };
@@ -3224,7 +3227,7 @@ async function startServer() {
   // Generic product update - updates any provided product fields
   app.patch("/api/admin/products/:id", async (req, res) => {
     try {
-      const allowed = ["name","price","description","image_url","store_type","requires_input","min_quantity","available","external_id","price_per_unit","subcategory_id","sub_sub_category_id"];
+      const allowed = ["name","price","description","image_url","store_type","requires_input","min_quantity","max_quantity","available","external_id","price_per_unit","subcategory_id","sub_sub_category_id"];
       const payload = req.body || {};
       const updateData:any = {};
       for (const k of Object.keys(payload)) {
