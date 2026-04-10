@@ -1,43 +1,35 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0a0a1a,30:0f0c29,60:1a0533,100:0a0a1a&height=220&section=header&text=SYRIA%20BIT&fontSize=90&fontColor=ffffff&fontAlignY=40&desc=◈%20Digital%20Commerce%20Architecture%20◈&descAlignY=62&descSize=18&animation=fadeIn&fontFamily=monospace" width="100%"/>
-
-</div>
-
-<div align="center">
-
-[![Typing SVG](https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=800&size=22&duration=2800&pause=1000&color=7C3AED&center=true&vCenter=true&width=680&lines=◆+E-Commerce+Solutions+Architect;◆+Fast+%7C+Secure+%7C+Scalable+Infrastructure;◆+نبني+متجرك+الإلكتروني+الاحترافي;◆+Syria+Bit+—+Your+Digital+Partner)](https://git.io/typing-svg)
-
-</div>
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:050510,25:0f0c29,60:1a0533,100:050510&height=230&section=header&text=SYRIA%20BIT&fontSize=95&fontColor=ffffff&fontAlignY=42&desc=◈%20Digital%20Commerce%20Architecture%20·%20سوريا%20بيت%20◈&descAlignY=64&descSize=17&animation=fadeIn&fontFamily=monospace" width="100%"/>
 
 <br/>
 
-<div align="center">
-
-![Company](https://img.shields.io/badge/▣%20COMPANY-SYRIA%20BIT%20%28SYB%29-7c3aed?style=for-the-badge&labelColor=0a0a1a&logoColor=white)
-![Phone](https://img.shields.io/badge/▣%20CONTACT-%2B212773963897-06b6d4?style=for-the-badge&labelColor=0a0a1a)
-![Status](https://img.shields.io/badge/▣%20STATUS-OPERATIONAL-10b981?style=for-the-badge&labelColor=0a0a1a)
-![Focus](https://img.shields.io/badge/▣%20FOCUS-E--COMMERCE-f59e0b?style=for-the-badge&labelColor=0a0a1a)
-
-</div>
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=JetBrains+Mono&weight=800&size=21&duration=2800&pause=1000&color=A78BFA&center=true&vCenter=true&width=700&lines=◆+E-Commerce+Solutions+Architect;◆+Fast+%7C+Secure+%7C+Scalable+Infrastructure;◆+نبني+متجرك+الإلكتروني+الاحترافي;◆+Syria+Bit+—+شريكك+الرقمي)](https://git.io/typing-svg)
 
 <br/>
+
+![Company](https://img.shields.io/badge/▣%20COMPANY-SYRIA%20BIT%20%28SYB%29-7c3aed?style=for-the-badge&labelColor=050510)
+![Phone](https://img.shields.io/badge/▣%20PHONE-%2B212%2077%20396%203897-06b6d4?style=for-the-badge&labelColor=050510)
+![Status](https://img.shields.io/badge/▣%20STATUS-OPERATIONAL-10b981?style=for-the-badge&labelColor=050510)
+![Focus](https://img.shields.io/badge/▣%20FOCUS-E--COMMERCE-f59e0b?style=for-the-badge&labelColor=050510)
+
+</div>
 
 ---
 
 <div align="center">
 
 ```
-╔══════════════════════════════════════════════════════════════════════╗
-║                                                                      ║
-║   ░██████╗██╗░░░██╗██████╗░                                          ║
-║   ██╔════╝╚██╗░██╔╝██╔══██╗                                          ║
-║   ╚█████╗░░╚████╔╝░██████╦╝    ◈ SYRIA BIT · سوريا بيت ◈            ║
-║   ░╚═══██╗░░╚██╔╝░░██╔══██╗    ─────────────────────────            ║
-║   ██████╔╝░░░██║░░░██████╦╝    Digital Commerce Architecture         ║
-║   ╚═════╝░░░░╚═╝░░░╚═════╝░    بناء المتاجر الإلكترونية              ║
-║                                                                      ║
-╚══════════════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════════════╗
+║                                                                          ║
+║   ░██████╗██╗░░░██╗██████╗░                                              ║
+║   ██╔════╝╚██╗░██╔╝██╔══██╗                                              ║
+║   ╚█████╗░░╚████╔╝░██████╦╝    ◈  SYRIA BIT  ·  سوريا بيت  ◈            ║
+║   ░╚═══██╗░░╚██╔╝░░██╔══██╗    ─────────────────────────────────         ║
+║   ██████╔╝░░░██║░░░██████╦╝    Digital Commerce Architecture              ║
+║   ╚═════╝░░░░╚═╝░░░╚═════╝░    بناء المتاجر الإلكترونية الاحترافية       ║
+║                                                                          ║
+╚══════════════════════════════════════════════════════════════════════════╝
 ```
 
 </div>
@@ -54,11 +46,10 @@
 const SyriaBit = {
   name     : "Syria Bit",
   alias    : "SYB",
-  founded  : "2020",
-  contact  : "+212 77 396 3897",
+  phone    : "+212 77 396 3897",
 
   mission  : "بناء متاجر إلكترونية احترافية",
-  vision   : "تمكين الأعمال الرقمية في العالم العربي",
+  vision   : "تمكين الأعمال الرقمية",
 
   services : [
     "▸  Full E-Commerce Stores",
@@ -66,7 +57,7 @@ const SyriaBit = {
     "▸  Secure Payment Gateways",
     "▸  Smart Admin Dashboards",
     "▸  Performance Optimization",
-    "▸  UI/UX Professional Design",
+    "▸  Professional UI/UX Design",
   ],
 
   status   : "[ ONLINE — Ready to build ]"
@@ -79,14 +70,13 @@ const SyriaBit = {
 ```python
 class SyriaBit:
     """
-    ╔══════════════════════════════════╗
-    ║  Syria Bit  ·  SYB               ║
-    ║  شريكك في النجاح الرقمي          ║
-    ╚══════════════════════════════════╝
+    ╔═══════════════════════════════════╗
+    ║  Syria Bit  ·  SYB                ║
+    ║  شريكك في النجاح الرقمي           ║
+    ╚═══════════════════════════════════╝
     """
     expertise  = "E-Commerce Architecture"
     stack      = "Full Stack Solutions"
-    coverage   = "Arab World & Beyond"
     support    = "24 / 7 Technical Support"
 
     score = {
@@ -97,12 +87,70 @@ class SyriaBit:
         "pricing"    : "■■■■░   85%",
     }
 
-    phone = "+212 77 396 3897"
+    contact = "+212 77 396 3897"
 ```
 
 </td>
 </tr>
 </table>
+
+---
+
+## ◈ STATS · الأرقام
+
+<br/>
+
+<div align="center">
+
+<table>
+<tr>
+
+<td align="center" width="33%">
+
+```
+╔═══════════════════╗
+║                   ║
+║      150+         ║
+║   مشروع منجز      ║
+║    PROJECTS       ║
+║                   ║
+╚═══════════════════╝
+```
+
+</td>
+
+<td align="center" width="33%">
+
+```
+╔═══════════════════╗
+║                   ║
+║       99%         ║
+║   رضا العملاء     ║
+║  SATISFACTION     ║
+║                   ║
+╚═══════════════════╝
+```
+
+</td>
+
+<td align="center" width="33%">
+
+```
+╔═══════════════════╗
+║                   ║
+║      24/7         ║
+║    دعم فني        ║
+║    SUPPORT        ║
+║                   ║
+╚═══════════════════╝
+```
+
+</td>
+
+</tr>
+</table>
+
+</div>
 
 ---
 
@@ -115,59 +163,90 @@ class SyriaBit:
 <table>
 <tr>
 
-<td align="center" width="25%">
+<td align="center" width="33%">
 
-<img src="https://img.shields.io/badge/─────────────────────-SERVICE__01-7c3aed?style=flat-square&labelColor=0a0a1a"/>
+![S01](https://img.shields.io/badge/━━━━━━━━━━━━━━━━━━━-SERVICE__01-7c3aed?style=flat-square&labelColor=050510)
 
 **متجر إلكتروني متكامل**
-`Full E-Commerce Store`
+`Full E-Commerce`
 
-<img src="https://img.shields.io/badge/▸-Professional%20UI%2FUX-7c3aed?style=flat-square&labelColor=0f0c29"/>
-<img src="https://img.shields.io/badge/▸-Product%20Management-7c3aed?style=flat-square&labelColor=0f0c29"/>
-<img src="https://img.shields.io/badge/▸-Advanced%20Cart-7c3aed?style=flat-square&labelColor=0f0c29"/>
-<img src="https://img.shields.io/badge/▸-Order%20Tracking-7c3aed?style=flat-square&labelColor=0f0c29"/>
+![](https://img.shields.io/badge/▸-Professional%20UI%2FUX-7c3aed?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-Product%20Management-7c3aed?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-Advanced%20Cart-7c3aed?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-Order%20Tracking-7c3aed?style=flat-square&labelColor=0f0c29)
 
 </td>
 
-<td align="center" width="25%">
+<td align="center" width="33%">
 
-<img src="https://img.shields.io/badge/─────────────────────-SERVICE__02-06b6d4?style=flat-square&labelColor=0a0a1a"/>
+![S02](https://img.shields.io/badge/━━━━━━━━━━━━━━━━━━━-SERVICE__02-06b6d4?style=flat-square&labelColor=050510)
 
-**بوابات الدفع**
+**بوابات دفع آمنة**
 `Payment Gateways`
 
-<img src="https://img.shields.io/badge/▸-Credit%20Card%20Pay-06b6d4?style=flat-square&labelColor=0f0c29"/>
-<img src="https://img.shields.io/badge/▸-Secure%20E--Payment-06b6d4?style=flat-square&labelColor=0f0c29"/>
-<img src="https://img.shields.io/badge/▸-Full%20SSL%20Encrypt-06b6d4?style=flat-square&labelColor=0f0c29"/>
-<img src="https://img.shields.io/badge/▸-Fraud%20Protection-06b6d4?style=flat-square&labelColor=0f0c29"/>
+![](https://img.shields.io/badge/▸-Credit%20Card%20Pay-06b6d4?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-Secure%20E--Payment-06b6d4?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-Full%20SSL%20Encrypt-06b6d4?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-Fraud%20Protection-06b6d4?style=flat-square&labelColor=0f0c29)
 
 </td>
 
-<td align="center" width="25%">
+<td align="center" width="33%">
 
-<img src="https://img.shields.io/badge/─────────────────────-SERVICE__03-10b981?style=flat-square&labelColor=0a0a1a"/>
+![S03](https://img.shields.io/badge/━━━━━━━━━━━━━━━━━━━-SERVICE__03-10b981?style=flat-square&labelColor=050510)
 
-**لوحة التحكم**
+**لوحة تحكم ذكية**
 `Smart Dashboard`
 
-<img src="https://img.shields.io/badge/▸-Live%20Sales%20Stats-10b981?style=flat-square&labelColor=0f0c29"/>
-<img src="https://img.shields.io/badge/▸-Inventory%20Control-10b981?style=flat-square&labelColor=0f0c29"/>
-<img src="https://img.shields.io/badge/▸-Detailed%20Reports-10b981?style=flat-square&labelColor=0f0c29"/>
-<img src="https://img.shields.io/badge/▸-User%20Analytics-10b981?style=flat-square&labelColor=0f0c29"/>
+![](https://img.shields.io/badge/▸-Live%20Sales%20Stats-10b981?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-Inventory%20Control-10b981?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-Detailed%20Reports-10b981?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-User%20Analytics-10b981?style=flat-square&labelColor=0f0c29)
 
 </td>
 
-<td align="center" width="25%">
+</tr>
+<tr>
 
-<img src="https://img.shields.io/badge/─────────────────────-SERVICE__04-f59e0b?style=flat-square&labelColor=0a0a1a"/>
+<td align="center" width="33%">
 
-**تطبيق الموبايل**
-`Mobile Application`
+![S04](https://img.shields.io/badge/━━━━━━━━━━━━━━━━━━━-SERVICE__04-f59e0b?style=flat-square&labelColor=050510)
 
-<img src="https://img.shields.io/badge/▸-iOS%20%26%20Android-f59e0b?style=flat-square&labelColor=0f0c29"/>
-<img src="https://img.shields.io/badge/▸-Push%20Notifications-f59e0b?style=flat-square&labelColor=0f0c29"/>
-<img src="https://img.shields.io/badge/▸-Smooth%20UX-f59e0b?style=flat-square&labelColor=0f0c29"/>
-<img src="https://img.shields.io/badge/▸-Offline%20Mode-f59e0b?style=flat-square&labelColor=0f0c29"/>
+**تطبيق موبايل**
+`Mobile App`
+
+![](https://img.shields.io/badge/▸-iOS%20%26%20Android-f59e0b?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-Push%20Notifications-f59e0b?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-Smooth%20UX-f59e0b?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-Offline%20Mode-f59e0b?style=flat-square&labelColor=0f0c29)
+
+</td>
+
+<td align="center" width="33%">
+
+![S05](https://img.shields.io/badge/━━━━━━━━━━━━━━━━━━━-SERVICE__05-ef4444?style=flat-square&labelColor=050510)
+
+**حماية وأمان**
+`Security & SSL`
+
+![](https://img.shields.io/badge/▸-SSL%20Certificate-ef4444?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-DDoS%20Protection-ef4444?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-Data%20Encryption-ef4444?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-Secure%20Backups-ef4444?style=flat-square&labelColor=0f0c29)
+
+</td>
+
+<td align="center" width="33%">
+
+![S06](https://img.shields.io/badge/━━━━━━━━━━━━━━━━━━━-SERVICE__06-8b5cf6?style=flat-square&labelColor=050510)
+
+**أداء وسرعة**
+`Performance`
+
+![](https://img.shields.io/badge/▸-Speed%20Optimization-8b5cf6?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-CDN%20Integration-8b5cf6?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-Caching%20System-8b5cf6?style=flat-square&labelColor=0f0c29)
+![](https://img.shields.io/badge/▸-Core%20Web%20Vitals-8b5cf6?style=flat-square&labelColor=0f0c29)
 
 </td>
 
@@ -212,8 +291,8 @@ class SyriaBit:
 
 ![Nginx](https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)
-![Let's Encrypt](https://img.shields.io/badge/SSL_Certified-003A70?style=for-the-badge&logo=letsencrypt&logoColor=white)
 ![Cloudflare](https://img.shields.io/badge/Cloudflare-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)
+![SSL](https://img.shields.io/badge/SSL_Certified-003A70?style=for-the-badge&logo=letsencrypt&logoColor=white)
 
 </div>
 
@@ -273,19 +352,18 @@ flowchart LR
 ```
 ╔══════════════════════════╗
 ║                          ║
-║   [ STARTER ]            ║
+║      [ STARTER ]         ║
 ║   ══════════════════     ║
 ║   للمشاريع الصغيرة       ║
 ║                          ║
 ╠══════════════════════════╣
 ║                          ║
-║  ▸ Basic E-Store         ║
-║  ▸ Up to 100 Products    ║
-║  ▸ Simple Dashboard      ║
-║  ▸ Free SSL Certificate  ║
-║  ▸ Basic Tech Support    ║
-║  ✗ Mobile Application    ║
-║  ✗ Custom API            ║
+║  ◆ متجر أساسي            ║
+║  ◆ حتى 100 منتج          ║
+║  ◆ SSL مجاني              ║
+║  ◆ دعم أساسي              ║
+║  ✗ تطبيق موبايل           ║
+║  ✗ API مخصص               ║
 ║                          ║
 ╠══════════════════════════╣
 ║  CONTACT: +212773963897  ║
@@ -299,19 +377,18 @@ flowchart LR
 ```
 ╔══════════════════════════╗
 ║                          ║
-║ [ PROFESSIONAL ]  ★ HOT  ║
-║ ══════════════════════   ║
-║  الأكثر طلباً            ║
+║  [ PROFESSIONAL ] ★ HOT  ║
+║  ════════════════════    ║
+║     الأكثر طلباً         ║
 ║                          ║
 ╠══════════════════════════╣
 ║                          ║
-║ ▸ Full E-Commerce Store  ║
-║ ▸ Unlimited Products     ║
-║ ▸ Smart Dashboard        ║
-║ ▸ Advanced Payments      ║
-║ ▸ SEO Optimization       ║
-║ ▸ 24/7 Support           ║
-║ ✗ Mobile Application     ║
+║  ◆ متجر متكامل           ║
+║  ◆ منتجات لا محدودة      ║
+║  ◆ لوحة تحكم ذكية        ║
+║  ◆ بوابة دفع متقدمة      ║
+║  ◆ تحسين SEO              ║
+║  ◆ دعم 24/7               ║
 ║                          ║
 ╠══════════════════════════╣
 ║  CONTACT: +212773963897  ║
@@ -325,19 +402,18 @@ flowchart LR
 ```
 ╔══════════════════════════╗
 ║                          ║
-║   [ ENTERPRISE ]         ║
+║     [ ENTERPRISE ]       ║
 ║   ══════════════════     ║
 ║   للمشاريع الكبيرة       ║
 ║                          ║
 ╠══════════════════════════╣
 ║                          ║
-║  ▸ All PRO Features      ║
-║  ▸ iOS & Android App     ║
-║  ▸ Custom API            ║
-║  ▸ ERP Integration       ║
-║  ▸ Dedicated Manager     ║
-║  ▸ Private Server        ║
-║  ▸ Custom Analytics      ║
+║  ◆ كل مزايا PRO          ║
+║  ◆ تطبيق iOS/Android     ║
+║  ◆ API مخصص               ║
+║  ◆ تكامل ERP              ║
+║  ◆ مدير حساب خاص          ║
+║  ◆ خادم مخصص              ║
 ║                          ║
 ╠══════════════════════════╣
 ║  CONTACT: +212773963897  ║
@@ -359,25 +435,25 @@ flowchart LR
 
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=rect&color=0:7c3aed,50:4f46e5,100:06b6d4&height=4&section=header" width="75%"/>
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:7c3aed,50:4f46e5,100:06b6d4&height=4" width="75%"/>
 
 <br/><br/>
 
-[![Call](https://img.shields.io/badge/▣_CALL_US-%2B212%2077%20396%203897-7c3aed?style=for-the-badge&labelColor=0a0a1a&logo=phone&logoColor=white)](tel:+212773963897)
-[![WhatsApp](https://img.shields.io/badge/▣_WHATSAPP-%2B212%2077%20396%203897-25D366?style=for-the-badge&logo=whatsapp&logoColor=white&labelColor=0a0a1a)](https://wa.me/212773963897)
+[![Call](https://img.shields.io/badge/▣%20CALL_US-%2B212%2077%20396%203897-7c3aed?style=for-the-badge&labelColor=050510&logo=phone&logoColor=white)](tel:+212773963897)
+[![WhatsApp](https://img.shields.io/badge/▣%20WHATSAPP-%2B212%2077%20396%203897-25D366?style=for-the-badge&logo=whatsapp&logoColor=white&labelColor=050510)](https://wa.me/212773963897)
 
 <br/>
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                                                                │
-│   PHONE / WHATSAPP  ▸  +212 77 396 3897                       │
-│   COMPANY           ▸  Syria Bit  (SYB)                       │
-│   SPECIALIZATION    ▸  E-Commerce Architecture                │
-│   AVAILABILITY      ▸  24 / 7  —  Always Online               │
-│   COVERAGE          ▸  Arab World & International             │
-│                                                                │
-└────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│                                                                    │
+│   PHONE / WHATSAPP  ▸  +212 77 396 3897                           │
+│   COMPANY           ▸  Syria Bit  (SYB)                           │
+│   SPECIALIZATION    ▸  E-Commerce Architecture                    │
+│   AVAILABILITY      ▸  24 / 7  —  Always Online                   │
+│   COVERAGE          ▸  Arab World & International                 │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 <br/>
@@ -387,22 +463,17 @@ flowchart LR
 
 <br/>
 
-<img src="https://capsule-render.vercel.app/api?type=rect&color=0:7c3aed,50:4f46e5,100:06b6d4&height=4&section=footer" width="75%"/>
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:7c3aed,50:4f46e5,100:06b6d4&height=4" width="75%"/>
 
-</div>
+<br/><br/>
 
-<br/>
-
----
-
-<div align="center">
-
-![Visitors](https://visitor-badge.laobi.icu/badge?page_id=syriaBit.syb&style=for-the-badge&color=7c3aed&labelColor=0a0a1a)
-![SYB](https://img.shields.io/badge/Syria_Bit-SYB-7c3aed?style=for-the-badge&labelColor=0a0a1a)
-![Made](https://img.shields.io/badge/Made_in-Syria-cc0000?style=for-the-badge&labelColor=0a0a1a)
+![Visitors](https://visitor-badge.laobi.icu/badge?page_id=syriaBit.syb&style=for-the-badge&color=7c3aed&labelColor=050510)
+![SYB](https://img.shields.io/badge/Syria_Bit-SYB-7c3aed?style=for-the-badge&labelColor=050510)
+![Made](https://img.shields.io/badge/Made_in-Syria-cc0000?style=for-the-badge&labelColor=050510)
 
 <br/>
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0a0a1a,40:0f0c29,80:1a0533,100:0a0a1a&height=130&section=footer&text=SYRIA%20BIT%20%C2%A9%202025&fontSize=22&fontColor=7c3aed&fontAlignY=65&animation=twinkling&fontFamily=monospace" width="100%"/>
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:050510,30:0f0c29,70:1a0533,100:050510&height=140&section=footer&text=SYRIA%20BIT%20%C2%A9%202025&fontSize=24&fontColor=7c3aed&fontAlignY=65&animation=twinkling&fontFamily=monospace" width="100%"/>
 
 </div>
+
