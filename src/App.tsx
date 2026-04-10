@@ -331,6 +331,8 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [checkoutQuantity, setCheckoutQuantity] = useState<number>(0);
   const [checkoutOrderResult, setCheckoutOrderResult] = useState<any>(null);
+  const [checkoutPlayerInput, setCheckoutPlayerInput] = useState<string>("");
+const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -1716,9 +1718,11 @@ export default function App() {
                     onClick={() => {
                       if (!user) return setView({ type: "login" });
                       if (prod.store_type === 'quick_order') {
+                        setQuickOrderPlayerId("");
                         setView({ type: "quick_order", data: prod });
                       } else {
                         setCheckoutQuantity(parseInt(String(prod.min_quantity)) || 0);
+                        setCheckoutPlayerInput("");
                         setView({ type: "checkout", data: prod });
                       }
                     }}
@@ -1810,6 +1814,7 @@ export default function App() {
                   if (isUnavailable) return;
                   if (!user) return setView({ type: "login" });
                   if (prod.store_type === 'quick_order') {
+                  setQuickOrderPlayerId("");
                     setView({ type: "quick_order", data: prod });
                   } else {
                     setCheckoutQuantity(parseInt(String(prod.min_quantity)) || 0);
@@ -1830,8 +1835,9 @@ export default function App() {
 
   const QuickOrderView = () => {
     const prod = view.data;
-    const [playerId, setPlayerId] = useState("");
-    const [loading, setLoading] = useState(false);
+    const playerId = quickOrderPlayerId;
+     const setPlayerId = setQuickOrderPlayerId;
+       const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
     const finalPrice = user?.is_vip ? Number(prod.price) * 0.95 : Number(prod.price);
@@ -1952,7 +1958,7 @@ export default function App() {
 
     const handlePurchase = async () => {
       if (!user) return;
-      const extraData = extraRef.current?.value || "";
+      const extraData = checkoutPlayerInput || "";
       const quantity = parseFloat(qtyRef.current?.value || "1") || 1;
       if (prod.requires_input && !extraData) return setError("يرجى إدخال البيانات المطلوبة");
       if ((prod.store_type === 'quantities' || prod.store_type === 'external_api') && quantity < (prod.min_quantity || 1)) return setError(`أقل كمية مسموحة هي ${prod.min_quantity}`);
@@ -2175,9 +2181,9 @@ export default function App() {
                 {prod.params?.[0] || "معرف اللاعب (Player ID)"} *
               </label>
               <input
-                ref={extraRef}
                 type="text"
-                defaultValue=""
+                value={checkoutPlayerInput}
+                onChange={(e) => setCheckoutPlayerInput(e.target.value)}
                 placeholder={`أدخل ${prod.params?.[0] || "معرف اللاعب"} هنا...`}
                 className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-blue-400 transition-colors text-center font-bold text-lg`}
               />
