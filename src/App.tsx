@@ -1522,8 +1522,13 @@ export default function App() {
         {/* Ticker / Scrolling Text */}
         {tickerText && tickerText.trim() && (
           <div className={`mx-4 rounded-xl overflow-hidden ${theme.primary} shadow-sm`}>
-            <div className="ticker-wrap">
-              <div className="ticker-track">{tickerText}</div>
+            <div className="overflow-hidden py-2 px-3">
+              <div className="ticker-track" style={{ color: "#ffffff" }}>
+                <span className="px-8">{tickerText}</span>
+                <span className="px-8">{tickerText}</span>
+                <span className="px-8">{tickerText}</span>
+                <span className="px-8">{tickerText}</span>
+              </div>
             </div>
           </div>
         )}
@@ -2674,7 +2679,7 @@ export default function App() {
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    order.status === 'completed' ? 'bg-green-50 text-green-600' :
+                    order.status === 'completed' ? 'bg-brand-light text-brand' :
                     order.status === 'failed' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
                   }`}>
                     {order.status === 'completed' ? <CheckCircle size={20} /> :
@@ -2689,7 +2694,7 @@ export default function App() {
                   <div className="text-left">
                     <p className="font-bold text-brand">{order.total_amount} $</p>
                     <p className={`text-[10px] font-medium ${
-                      order.status === 'completed' ? 'text-green-600' :
+                      order.status === 'completed' ? 'text-brand' :
                       order.status === 'failed' ? 'text-red-500' : 'text-blue-500'
                     }`}>
                       {order.status === 'new' ? 'جديد' : order.status === 'completed' ? 'مكتمل' : order.status === 'failed' || order.status === 'cancelled' ? 'ملغي' : order.status === 'pending_admin' ? 'ينتظر الموافقة' : 'قيد المعالجة'}
@@ -5318,7 +5323,7 @@ const AdminUserCard = ({ u, fetchAdminUsers, handleToggleVip, handleBlockUser, h
 };
 
 // ===================== ADMIN STATS TAB =====================
-const AdminStatsTab = ({ adminFetch }: { adminFetch: (url: string, options?: RequestInit) => Promise<Response> }) => {
+const AdminStatsTab = () => {
   const [filter, setFilter] = React.useState<"daily"|"weekly"|"monthly"|"custom">("monthly");
   const [customFrom, setCustomFrom] = React.useState("");
   const [customTo, setCustomTo] = React.useState("");
@@ -5437,52 +5442,18 @@ const AdminStatsTab = ({ adminFetch }: { adminFetch: (url: string, options?: Req
               </span>
             </div>
             <p className="text-3xl font-black text-amber-700">{stats.profit?.toFixed(2)} $</p>
-            <div className="mt-3 bg-white/60 rounded-xl p-3 space-y-1.5">
+            <div className="mt-3 bg-white/60 rounded-xl p-3">
               <div className="flex justify-between text-[11px]">
-                <span className="text-gray-500">إجمالي المبيعات</span>
-                <span className="font-bold text-gray-700">{stats.gross_revenue?.toFixed(4)} $</span>
+                <span className="text-gray-500">الإيرادات الإجمالية</span>
+                <span className="font-bold text-gray-700">{stats.gross_revenue?.toFixed(2)} $</span>
               </div>
-              <div className="flex justify-between text-[11px]">
-                <span className="text-gray-500">تكلفة API (سعر الشراء)</span>
-                <span className="font-bold text-red-500">- {stats.api_cost?.toFixed(4)} $</span>
+              <div className="flex justify-between text-[11px] mt-1">
+                <span className="text-gray-500">تكلفة API</span>
+                <span className="font-bold text-red-500">- {stats.api_cost?.toFixed(2)} $</span>
               </div>
-              <div className="border-t border-amber-100 pt-2 flex justify-between text-[11px]">
+              <div className="border-t border-gray-100 mt-2 pt-2 flex justify-between text-[11px]">
                 <span className="font-bold text-gray-700">صافي الربح</span>
-                <span className={`font-black ${(stats.profit||0) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                  {stats.profit?.toFixed(4)} $
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* API Details Card */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Zap size={15} className="text-blue-500"/>
-              <p className="font-bold text-gray-800 text-sm">تفاصيل أرباح API</p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
-                <p className="text-[9px] text-blue-500 font-bold mb-1">عدد طلبات API المكتملة</p>
-                <p className="text-xl font-black text-blue-700">{stats.accepted_orders}</p>
-              </div>
-              <div className="bg-green-50 rounded-xl p-3 border border-green-100">
-                <p className="text-[9px] text-green-600 font-bold mb-1">متوسط الربح / طلب</p>
-                <p className="text-xl font-black text-green-700">
-                  {stats.accepted_orders > 0 ? ((stats.profit||0) / stats.accepted_orders).toFixed(4) : '0.0000'} $
-                </p>
-              </div>
-              <div className="bg-purple-50 rounded-xl p-3 border border-purple-100 col-span-2">
-                <p className="text-[9px] text-purple-600 font-bold mb-1">هامش الربح الإجمالي</p>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-purple-500 h-2 rounded-full transition-all"
-                      style={{width: `${Math.min(Math.max(stats.profit_margin||0, 0), 100)}%`}}
-                    />
-                  </div>
-                  <span className="font-black text-purple-700 text-sm">{stats.profit_margin?.toFixed(1)}%</span>
-                </div>
+                <span className="font-black text-green-600">{stats.profit?.toFixed(2)} $</span>
               </div>
             </div>
           </div>
@@ -5653,18 +5624,19 @@ const AdminOrdersTab = ({adminOrders, orderSearch, setOrderSearch, orderDateFilt
   const [modeLoaded, setModeLoaded] = React.useState(false);
   const [expandedOrders, setExpandedOrders] = React.useState<Set<number>>(new Set());
   const [actionLoading, setActionLoading] = React.useState<number | null>(null);
+  const [activeFilter, setActiveFilter] = React.useState<string>("all");
   React.useEffect(() => {
-  fetch("/api/settings").then(r => r.json()).then((data: any[]) => {
-  const s = data.find((x: any) => x.key === "order_processing_mode");
-  setOrderMode(s?.value || "manual");
-  setModeLoaded(true);
-  }).catch(() => setModeLoaded(true));
+    fetch("/api/settings").then(r => r.json()).then((data: any[]) => {
+      const s = data.find((x: any) => x.key === "order_processing_mode");
+      setOrderMode(s?.value || "manual");
+      setModeLoaded(true);
+    }).catch(() => setModeLoaded(true));
   }, []);
   const toggleMode = async (newMode: string) => {
-  setModeLoading(true);
-  await adminFetch("/api/admin/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "order_processing_mode", value: newMode }) });
-  setOrderMode(newMode);
-  setModeLoading(false);
+    setModeLoading(true);
+    await adminFetch("/api/admin/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: "order_processing_mode", value: newMode }) });
+    setOrderMode(newMode);
+    setModeLoading(false);
   };
   const toggleExpand = (orderId: number) => {
     setExpandedOrders(prev => {
@@ -5673,12 +5645,10 @@ const AdminOrdersTab = ({adminOrders, orderSearch, setOrderSearch, orderDateFilt
       return next;
     });
   };
-  const handleOrderAction = async (orderId: number, action: "approved" | "rejected", adminResp?: string, overridePlayerId?: string) => {
+  const handleOrderAction = async (orderId: number, action: "approved" | "rejected", adminResp?: string) => {
     setActionLoading(orderId);
     try {
-      const body: any = { status: action, admin_response: adminResp || "" };
-      if (overridePlayerId && overridePlayerId.trim() !== "") body.override_player_id = overridePlayerId.trim();
-      const res = await adminFetch(`/api/admin/orders/${orderId}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const res = await adminFetch(`/api/admin/orders/${orderId}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: action, admin_response: adminResp || "" }) });
       const data = await res.json();
       if (!res.ok || data.error) {
         alert(`❌ ${data.error || "حدث خطأ غير متوقع"}`);
@@ -5690,403 +5660,475 @@ const AdminOrdersTab = ({adminOrders, orderSearch, setOrderSearch, orderDateFilt
     }
     setActionLoading(null);
   };
-  const pendingAdminOrders = adminOrders.filter(o => o.status === 'pending_admin');
-  const filteredOrders = adminOrders.filter(o => !orderSearch || o.product_name?.includes(orderSearch) || String(o.id).includes(orderSearch) || o.user_name?.includes(orderSearch));
-  const [overridePlayerIds, setOverridePlayerIds] = React.useState<Record<number,string>>({});
-  return (
 
+  const statusConfig: Record<string, {label: string; bg: string; text: string; dot: string}> = {
+    completed:    { label: "مكتمل",         bg: "bg-emerald-50",  text: "text-emerald-700", dot: "bg-emerald-500" },
+    failed:       { label: "فشل",            bg: "bg-red-50",      text: "text-red-600",     dot: "bg-red-500" },
+    rejected:     { label: "مرفوض",         bg: "bg-red-50",      text: "text-red-600",     dot: "bg-red-500" },
+    processing:   { label: "معالجة",         bg: "bg-blue-50",     text: "text-blue-700",    dot: "bg-blue-500" },
+    pending_admin:{ label: "انتظار موافقة",  bg: "bg-amber-50",    text: "text-amber-700",   dot: "bg-amber-500" },
+    pending:      { label: "انتظار",         bg: "bg-gray-100",    text: "text-gray-600",    dot: "bg-gray-400" },
+  };
+  const getStatus = (s: string) => statusConfig[s] || statusConfig['pending'];
+
+  const storeTypeLabel = (st: string) => {
+    const m: Record<string,string> = { external_api: "🔗 API خارجي", quick_order: "⚡ سريع", quantities: "📦 كميات", accounts: "👤 حسابات", simple: "🏷 بسيط" };
+    return m[st] || st;
+  };
+
+  const pendingAdminOrders = adminOrders.filter((o: any) => o.status === 'pending_admin');
+  const filterTabs = [
+    { key: "all",          label: "الكل",     count: adminOrders.length },
+    { key: "pending_admin",label: "انتظار",   count: pendingAdminOrders.length },
+    { key: "processing",   label: "معالجة",   count: adminOrders.filter((o:any) => o.status==='processing').length },
+    { key: "completed",    label: "مكتملة",   count: adminOrders.filter((o:any) => o.status==='completed').length },
+    { key: "failed",       label: "فشل",      count: adminOrders.filter((o:any) => o.status==='failed'||o.status==='rejected').length },
+  ];
+  const filteredOrders = adminOrders.filter((o: any) => {
+    const matchSearch = !orderSearch || o.product_name?.includes(orderSearch) || String(o.id).includes(orderSearch) || o.user_name?.includes(orderSearch);
+    const matchFilter = activeFilter === "all" || (activeFilter === "failed" ? (o.status === 'failed' || o.status === 'rejected') : o.status === activeFilter);
+    return matchSearch && matchFilter;
+  });
+
+  return (
   <div className="space-y-4">
-    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-      <div className="flex items-center justify-between mb-2">
-        <div>
-          <h3 className="font-bold text-gray-800 flex items-center gap-2"><Zap size={16} className="text-[var(--brand)]"/>وضع المعالجة</h3>
-          <p className="text-[10px] text-gray-400 mt-0.5">{orderMode === 'auto' ? "تلقائي - يُرسل للـ API فوراً" : "يدوي - ينتظر موافقتك"}</p>
+    {/* وضع المعالجة */}
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between p-4">
+        <div className="flex items-center gap-3">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${orderMode==='auto' ? 'bg-emerald-100' : 'bg-amber-100'}`}>
+            <Zap size={17} className={orderMode==='auto' ? 'text-emerald-600' : 'text-amber-600'}/>
+          </div>
+          <div>
+            <p className="font-bold text-sm text-gray-800">وضع المعالجة</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">{orderMode === 'auto' ? "تلقائي — يُرسل للـ API فوراً" : "يدوي — ينتظر موافقتك"}</p>
+          </div>
         </div>
         {modeLoaded && (
           <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
-            <button onClick={() => toggleMode("auto")} disabled={modeLoading} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${orderMode === 'auto' ? 'bg-green-500 text-white shadow-sm' : 'text-gray-500'}`}>تلقائي</button>
-            <button onClick={() => toggleMode("manual")} disabled={modeLoading} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${orderMode === 'manual' ? 'bg-[var(--brand)] text-white shadow-sm' : 'text-gray-500'}`}>يدوي</button>
+            <button onClick={() => toggleMode("auto")} disabled={modeLoading} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${orderMode==='auto' ? 'bg-emerald-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>تلقائي</button>
+            <button onClick={() => toggleMode("manual")} disabled={modeLoading} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${orderMode==='manual' ? 'bg-[var(--brand)] text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>يدوي</button>
           </div>
         )}
       </div>
+      {/* إحصائيات سريعة */}
+      <div className="grid grid-cols-3 border-t border-gray-100">
+        {[
+          { label: "إجمالي", val: adminOrders.length, color: "text-gray-800" },
+          { label: "انتظار موافقة", val: pendingAdminOrders.length, color: "text-amber-600" },
+          { label: "معالجة", val: adminOrders.filter((o:any)=>o.status==='processing').length, color: "text-blue-600" },
+        ].map((s,i) => (
+          <div key={i} className={`p-3 text-center ${i<2?'border-l border-gray-100':''}`}>
+            <p className={`text-lg font-black ${s.color}`}>{s.val}</p>
+            <p className="text-[9px] text-gray-400">{s.label}</p>
+          </div>
+        ))}
+      </div>
     </div>
+
+    {/* طلبات تنتظر الموافقة — بطاقات بارزة */}
     {pendingAdminOrders.length > 0 && (
-      <div className="bg-white p-4 rounded-2xl border-2 border-amber-200 shadow-sm space-y-3">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-amber-400 flex items-center justify-center"><span className="text-white text-xs font-bold">{pendingAdminOrders.length}</span></div>
-          <h3 className="font-bold text-amber-700">طلبات تنتظر موافقتك</h3>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 px-1">
+          <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"/>
+          <p className="text-xs font-bold text-amber-700">{pendingAdminOrders.length} طلب ينتظر موافقتك</p>
         </div>
-        {pendingAdminOrders.map(order => {
+        {pendingAdminOrders.map((order: any) => {
           let metaParsed: any = {};
           try { metaParsed = JSON.parse(order.meta || "{}"); } catch {}
           const isLoading = actionLoading === order.id;
-          const storedPlayerId = metaParsed.playerId || metaParsed.input || metaParsed.userId || metaParsed.gameId || metaParsed.accountId || "";
-          const storeTypeP = order.order_items?.[0]?.products?.store_type;
+          const playerData = metaParsed.playerId || metaParsed.input || metaParsed.player_id || metaParsed.userId || metaParsed.gameId || "";
           return (
-            <div key={order.id} className="border border-amber-100 rounded-xl bg-amber-50/40 p-4 space-y-3">
-              {/* معلومات المستخدم */}
-              <div className="flex items-center gap-2">
-                {order.user_avatar ? (
-                  <img src={order.user_avatar} className="w-9 h-9 rounded-full object-cover border-2 border-amber-200 shrink-0" referrerPolicy="no-referrer"/>
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                    <span className="text-amber-700 font-bold text-xs">{(order.user_name||'?')[0]}</span>
+            <div key={order.id} className="bg-white rounded-2xl border-2 border-amber-200 shadow-sm overflow-hidden">
+              {/* رأس البطاقة */}
+              <div className="bg-amber-50 px-4 py-2.5 flex items-center justify-between border-b border-amber-100">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black text-amber-700 bg-amber-200 px-2 py-0.5 rounded-full">#{order.id}</span>
+                  <span className="text-[10px] text-amber-600 font-medium">{new Date(order.created_at).toLocaleString("ar-EG", {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+                </div>
+                <span className="text-[10px] font-bold text-amber-700">⏳ انتظار موافقة</span>
+              </div>
+              {/* تفاصيل */}
+              <div className="p-4 space-y-3">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm text-gray-900 truncate">{order.product_name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{order.user_name}</p>
+                  </div>
+                  <div className="text-left shrink-0 ml-3">
+                    <p className="text-base font-black text-[var(--brand)]">{(order.total_amount||0).toFixed(2)}$</p>
+                    {order.order_items?.[0]?.quantity > 1 && <p className="text-[10px] text-gray-400 text-right">× {order.order_items[0].quantity}</p>}
+                  </div>
+                </div>
+                {playerData && (
+                  <div className="bg-gray-50 rounded-xl px-3 py-2 flex items-center gap-2">
+                    <span className="text-[9px] text-gray-400 font-bold uppercase">Player ID</span>
+                    <span className="text-xs font-bold text-gray-800 font-mono">{playerData}</span>
                   </div>
                 )}
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-sm text-gray-800">{order.user_name}</p>
-                  {(order.user_email || order.users?.email) && <p className="text-[10px] text-gray-400 truncate">{order.user_email || order.users?.email}</p>}
-                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                    {order.user_login_id && <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-md font-mono">#{order.user_login_id}</span>}
-                    {(order.user_phone || order.users?.phone) && <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md">{order.user_phone || order.users?.phone}</span>}
-                  </div>
+                {order.category_name && (
+                  <p className="text-[10px] text-gray-400">{order.category_name}{order.subcategory_name ? ` › ${order.subcategory_name}` : ''}</p>
+                )}
+                {/* أزرار الإجراء */}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    disabled={isLoading}
+                    onClick={() => handleOrderAction(order.id, "approved")}
+                    className="flex-1 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all shadow-sm"
+                  >
+                    {isLoading ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"/> : <CheckCircle size={15}/>}
+                    قبول وإرسال للـ API
+                  </button>
+                  <button
+                    disabled={isLoading}
+                    onClick={() => { const r = prompt("سبب الرفض (اختياري):"); if (r !== null) handleOrderAction(order.id, "rejected", r || ""); }}
+                    className="bg-red-50 hover:bg-red-100 active:scale-95 text-red-600 px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all border border-red-200"
+                  >
+                    <XCircle size={15}/>رفض
+                  </button>
                 </div>
-              </div>
-              {/* تفاصيل الطلب */}
-              <div className="border-t border-amber-100 pt-2">
-                <p className="font-bold text-sm text-[var(--brand)]">#{order.id} - {order.product_name}</p>
-                <p className="text-xs text-gray-500">{(order.total_amount || 0).toFixed(2)} $</p>
-                {storedPlayerId && <p className="text-xs text-gray-600 mt-1">🎮 Player ID المُخزّن: <span className="font-mono font-bold text-gray-800">{storedPlayerId}</span></p>}
-              </div>
-              {/* تغيير Player ID إذا كان API خارجي */}
-              {storeTypeP === 'external_api' && (
-                <div>
-                  <p className="text-[9px] text-gray-400 font-bold mb-1">تصحيح Player ID (اختياري)</p>
-                  <input
-                    type="text"
-                    placeholder={storedPlayerId || "Player ID..."}
-                    value={overridePlayerIds[order.id] ?? ''}
-                    onChange={e => setOverridePlayerIds(prev => ({...prev, [order.id]: e.target.value}))}
-                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-[var(--brand)] font-mono"
-                  />
-                </div>
-              )}
-              <div className="flex gap-2">
-                <button disabled={isLoading} onClick={() => handleOrderAction(order.id, "approved", undefined, overridePlayerIds[order.id])} className="flex-1 bg-green-500 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60">
-                  {isLoading ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"/> : <CheckCircle size={12}/>}قبول وإرسال
-                </button>
-                <button disabled={isLoading} onClick={() => { const r = prompt("سبب الرفض:"); if (r !== null) handleOrderAction(order.id, "rejected", r || ""); }} className="flex-1 bg-red-100 text-red-600 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"><XCircle size={12}/>رفض</button>
               </div>
             </div>
           );
         })}
       </div>
     )}
-    <div className="relative">
-      <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-      <input type="text" placeholder="بحث في الطلبات..." value={orderSearch} onChange={e => setOrderSearch(e.target.value)} className="w-full bg-white border border-gray-100 rounded-xl pr-9 pl-3 py-2.5 text-xs outline-none shadow-sm"/>
+
+    {/* شريط البحث والفلاتر */}
+    <div className="space-y-2.5">
+      <div className="relative">
+        <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+        <input type="text" placeholder="بحث برقم الطلب، المنتج، أو المستخدم..." value={orderSearch} onChange={e => setOrderSearch(e.target.value)} className="w-full bg-white border border-gray-100 rounded-xl pr-9 pl-3 py-2.5 text-xs outline-none shadow-sm"/>
+      </div>
+      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+        {filterTabs.map(ft => (
+          <button
+            key={ft.key}
+            onClick={() => setActiveFilter(ft.key)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all shrink-0 ${activeFilter===ft.key ? 'bg-[var(--brand)] text-white shadow-sm' : 'bg-white text-gray-500 border border-gray-100'}`}
+          >
+            {ft.label}
+            {ft.count > 0 && <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${activeFilter===ft.key ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-600'}`}>{ft.count}</span>}
+          </button>
+        ))}
+      </div>
     </div>
-    <div className="space-y-3">
-      {filteredOrders.map(order => {
+
+    {/* قائمة الطلبات */}
+    <div className="space-y-2.5">
+      {filteredOrders.map((order: any) => {
         let metaParsed: any = {};
         try { metaParsed = JSON.parse(order.meta || "{}"); } catch {}
         const isExpanded = expandedOrders.has(order.id);
         const isLoading = actionLoading === order.id;
         const storeType = order.order_items?.[0]?.products?.store_type;
+        const statusInfo = getStatus(order.status);
+        const playerData = metaParsed.playerId || metaParsed.input || metaParsed.player_id || metaParsed.userId || "";
         return (
-        <div key={order.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="p-4">
-            {/* معلومات المستخدم — تظهر دائماً قبل السهم */}
-            <div className="flex items-center gap-3 mb-3">
-              {order.user_avatar ? (
-                <img src={order.user_avatar} className="w-9 h-9 rounded-full object-cover border-2 border-gray-100 shrink-0" referrerPolicy="no-referrer"/>
-              ) : (
-                <div className="w-9 h-9 rounded-full bg-[var(--brand-light)] flex items-center justify-center shrink-0">
-                  <span className="text-[var(--brand)] font-bold text-xs">{(order.user_name||'?')[0]}</span>
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm text-gray-800">{order.user_name}</p>
-                {(order.user_email || order.users?.email) && <p className="text-[10px] text-gray-400 truncate">{order.user_email || order.users?.email}</p>}
-                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                  {order.user_login_id && <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-md font-mono">#{order.user_login_id}</span>}
-                  {(order.user_phone || order.users?.phone) && <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md">{order.user_phone || order.users?.phone}</span>}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${order.status==='completed'?'bg-green-100 text-green-700':order.status==='failed'||order.status==='rejected'?'bg-red-100 text-red-600':order.status==='processing'?'bg-blue-100 text-blue-700':order.status==='pending_admin'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-600'}`}>
-                  {order.status==='completed'?'مكتمل':order.status==='failed'||order.status==='rejected'?'مرفوض':order.status==='processing'?'معالجة':order.status==='pending_admin'?'انتظار موافقة':'انتظار'}
-                </span>
-                <button onClick={() => toggleExpand(order.id)} className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center transition-transform" style={{transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)'}}>
-                  <ChevronDown size={13} className="text-gray-500"/>
-                </button>
-              </div>
-            </div>
-            {/* ملخص الطلب */}
-            <div className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
-              <div>
-                <p className="text-[9px] text-gray-400">الطلب</p>
-                <p className="text-xs font-bold text-gray-700 truncate max-w-[140px]">#{order.id} - {order.product_name}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] text-gray-400">المبلغ</p>
-                <p className="text-xs font-bold text-[var(--brand)]">{(order.total_amount || 0).toFixed(2)} $</p>
-              </div>
-            </div>
-            {/* API sync button */}
-            {metaParsed.ahminix_order_id && (order.status === 'processing' || order.status === 'pending') && (
-              <div className="flex gap-2 mt-2">
-                <span className="text-[10px] text-gray-400">API: {metaParsed.ahminix_order_id}</span>
-                <button
-                  onClick={async () => {
-                    const res = await adminFetch(`/api/admin/ahminix/sync-order/${order.id}`, { method: "POST" });
-                    const d = await res.json();
-                    alert(d.error ? `خطأ: ${d.error}` : `${d.oldStatus} ← ${d.newStatus} (API: ${d.ahminixStatus})`);
-                    fetchAdminOrders();
-                  }}
-                  className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-lg font-bold border border-blue-100"
-                >🔄 مزامنة</button>
-              </div>
-            )}
-          </div>
-          {/* Expanded details */}
-          {isExpanded && (
-            <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-2">
-              <p className="text-[10px] font-bold text-gray-500 uppercase mb-2">تفاصيل الطلب</p>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                  <p className="text-[9px] text-gray-400 mb-0.5">رقم الطلب</p>
-                  <p className="text-xs font-bold text-gray-700">#{order.id}</p>
-                </div>
-                <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                  <p className="text-[9px] text-gray-400 mb-0.5">التاريخ والوقت</p>
-                  <p className="text-xs font-bold text-gray-700">{new Date(order.created_at).toLocaleString("ar-EG")}</p>
-                </div>
-                <div className="bg-white rounded-xl p-2.5 border border-gray-100 col-span-2">
-                  <p className="text-[9px] text-gray-400 mb-0.5">المبلغ الإجمالي</p>
-                  <p className="text-xs font-bold text-green-700">{(order.total_amount || 0).toFixed(4)} $</p>
-                </div>
-                {order.category_name && (
-                  <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                    <p className="text-[9px] text-gray-400 mb-0.5">القسم الرئيسي</p>
-                    <p className="text-xs font-bold text-gray-700">{order.category_name}</p>
+          <div key={order.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            {/* رأس البطاقة */}
+            <button className="w-full text-right p-4" onClick={() => toggleExpand(order.id)}>
+              <div className="flex justify-between items-center gap-3">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${statusInfo.bg}`}>
+                    <div className={`w-2.5 h-2.5 rounded-full ${statusInfo.dot}`}/>
                   </div>
-                )}
-                {order.subcategory_name && (
-                  <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                    <p className="text-[9px] text-gray-400 mb-0.5">القسم الفرعي</p>
-                    <p className="text-xs font-bold text-gray-700">{order.subcategory_name}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm text-gray-900 truncate">{order.product_name}</p>
+                    <p className="text-[10px] text-gray-400">{order.user_name} · #{order.id}</p>
                   </div>
-                )}
-                <div className="bg-white rounded-xl p-2.5 border border-gray-100 col-span-2">
-                  <p className="text-[9px] text-gray-400 mb-0.5">المنتج</p>
-                  <p className="text-xs font-bold text-gray-700">{order.product_name}</p>
-                  {storeType && <p className="text-[9px] text-gray-400 mt-0.5">{storeType === 'external_api' ? '🔗 API خارجي' : storeType === 'manual' ? '👤 يدوي' : storeType}</p>}
                 </div>
-                {(metaParsed.playerId || metaParsed.input || metaParsed.userId || metaParsed.gameId || metaParsed.accountId) && (
-                  <div className="bg-white rounded-xl p-2.5 border border-gray-100 col-span-2">
-                    <p className="text-[9px] text-gray-400 mb-0.5">البيانات المُدخلة (Player ID / Input)</p>
-                    <p className="text-xs font-bold text-[var(--brand)] font-mono">{metaParsed.playerId || metaParsed.input || metaParsed.userId || metaParsed.gameId || metaParsed.accountId}</p>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="text-right">
+                    <p className="font-black text-sm text-[var(--brand)]">{(order.total_amount||0).toFixed(2)}$</p>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${statusInfo.bg} ${statusInfo.text}`}>{statusInfo.label}</span>
                   </div>
-                )}
-                {order.order_items?.[0]?.quantity > 1 && (
-                  <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                    <p className="text-[9px] text-gray-400 mb-0.5">الكمية</p>
-                    <p className="text-xs font-bold text-gray-700">×{order.order_items[0].quantity}</p>
-                  </div>
-                )}
+                  <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}/>
+                </div>
+              </div>
+            </button>
+
+            {/* تفاصيل موسعة */}
+            {isExpanded && (
+              <div className="border-t border-gray-100">
+                {/* معلومات سريعة */}
+                <div className="grid grid-cols-2 gap-px bg-gray-100">
+                  {[
+                    { label: "التاريخ", val: new Date(order.created_at).toLocaleString("ar-EG", {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) },
+                    { label: "المبلغ", val: `${(order.total_amount||0).toFixed(4)} $`, bold: true, color: "text-emerald-700" },
+                    ...(order.category_name ? [{ label: "القسم", val: order.category_name }] : []),
+                    ...(storeType ? [{ label: "نوع المنتج", val: storeTypeLabel(storeType) }] : []),
+                    ...(order.order_items?.[0]?.quantity > 1 ? [{ label: "الكمية", val: `× ${order.order_items[0].quantity}` }] : []),
+                    ...(playerData ? [{ label: "Player ID", val: playerData, mono: true, color: "text-[var(--brand)]" }] : []),
+                  ].map((item: any, i: number) => (
+                    <div key={i} className="bg-white p-3">
+                      <p className="text-[9px] text-gray-400 font-bold uppercase mb-0.5">{item.label}</p>
+                      <p className={`text-xs font-bold ${item.color||'text-gray-800'} ${item.mono?'font-mono':''} truncate`}>{item.val}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Ahminix info */}
                 {metaParsed.ahminix_order_id && (
-                  <div className="bg-white rounded-xl p-2.5 border border-gray-100 col-span-2">
-                    <p className="text-[9px] text-gray-400 mb-0.5">معرف Ahminix</p>
-                    <p className="text-xs font-mono text-blue-700">{metaParsed.ahminix_order_id}</p>
-                    {metaParsed.ahminix_status && <p className="text-[9px] text-gray-500 mt-0.5">حالة API: {metaParsed.ahminix_status}</p>}
+                  <div className="mx-4 my-3 bg-blue-50 rounded-xl p-3 flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[9px] text-blue-500 font-bold mb-0.5">معرف Ahminix</p>
+                      <p className="text-xs font-mono text-blue-800">{metaParsed.ahminix_order_id}</p>
+                      {metaParsed.ahminix_status && <p className="text-[9px] text-blue-400 mt-0.5">حالة: {metaParsed.ahminix_status}</p>}
+                    </div>
+                    {(order.status === 'processing' || order.status === 'pending') && (
+                      <button
+                        onClick={async () => {
+                          const res = await adminFetch(`/api/admin/ahminix/sync-order/${order.id}`, { method: "POST" });
+                          const d = await res.json();
+                          alert(d.error ? `خطأ: ${d.error}` : `✅ ${d.oldStatus} → ${d.newStatus}`);
+                          fetchAdminOrders();
+                        }}
+                        className="shrink-0 bg-blue-100 text-blue-700 px-3 py-1.5 rounded-xl text-[10px] font-bold border border-blue-200 flex items-center gap-1"
+                      >🔄 مزامنة</button>
+                    )}
                   </div>
                 )}
+
+                {/* ردود وحالات خاصة */}
                 {order.admin_response && (
-                  <div className="bg-amber-50 rounded-xl p-2.5 border border-amber-100 col-span-2">
-                    <p className="text-[9px] text-amber-600 mb-0.5 font-bold">رد الأدمن</p>
+                  <div className="mx-4 mb-3 bg-amber-50 rounded-xl p-3 border border-amber-100">
+                    <p className="text-[9px] text-amber-600 font-bold mb-0.5">رد الأدمن</p>
                     <p className="text-xs text-gray-700">{order.admin_response}</p>
                   </div>
                 )}
                 {metaParsed.refunded && (
-                  <div className="bg-green-50 rounded-xl p-2.5 border border-green-100 col-span-2">
-                    <p className="text-[9px] text-green-600 font-bold">✅ تم استرداد الرصيد</p>
-                    {metaParsed.refunded_at && <p className="text-[9px] text-gray-400">{new Date(metaParsed.refunded_at).toLocaleString("ar-EG")}</p>}
+                  <div className="mx-4 mb-3 bg-emerald-50 rounded-xl p-3 border border-emerald-100 flex items-center gap-2">
+                    <CheckCircle size={13} className="text-emerald-600 shrink-0"/>
+                    <div>
+                      <p className="text-xs text-emerald-700 font-bold">تم استرداد الرصيد</p>
+                      {metaParsed.refunded_at && <p className="text-[9px] text-gray-400">{new Date(metaParsed.refunded_at).toLocaleString("ar-EG")}</p>}
+                    </div>
+                  </div>
+                )}
+
+                {/* أزرار إجراء في القسم الموسع */}
+                {order.status === 'pending_admin' && (
+                  <div className="flex gap-2 p-4 pt-0">
+                    <button disabled={isLoading} onClick={() => handleOrderAction(order.id, "approved")} className="flex-1 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all">
+                      {isLoading ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"/> : <CheckCircle size={13}/>}قبول وإرسال
+                    </button>
+                    <button disabled={isLoading} onClick={() => { const r = prompt("سبب الرفض:"); if (r !== null) handleOrderAction(order.id, "rejected", r || ""); }} className="bg-red-50 text-red-600 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-60 border border-red-200">
+                      <XCircle size={13}/>رفض
+                    </button>
                   </div>
                 )}
               </div>
-              {/* أزرار الإجراءات */}
-              {order.status === 'pending_admin' && (
-                <div className="flex gap-2 mt-3 pt-3 border-t border-gray-200">
-                  <button disabled={isLoading} onClick={() => handleOrderAction(order.id, "approved")} className="flex-1 bg-green-500 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60">
-                    {isLoading ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"/> : <CheckCircle size={12}/>}قبول وإرسال
-                  </button>
-                  <button disabled={isLoading} onClick={() => { const r = prompt("سبب الرفض:"); if (r !== null) handleOrderAction(order.id, "rejected", r || ""); }} className="flex-1 bg-red-100 text-red-600 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"><XCircle size={12}/>رفض</button>
-                </div>
-              )}
-              {/* تعديل الحالة مباشرة — للمكتمل والمرفوض فقط */}
-              {(order.status === 'completed' || order.status === 'failed' || order.status === 'rejected') && (
-                <div className="mt-3 pt-3 border-t border-gray-200">
-                  <p className="text-[9px] text-gray-400 font-bold mb-2">⚙️ تعديل الحالة مباشرة</p>
-                  <div className="flex gap-2">
-                    {order.status !== 'completed' && (
-                      <button
-                        disabled={isLoading}
-                        onClick={async () => {
-                          if (!confirm("تغيير الحالة إلى مكتمل؟")) return;
-                          await handleOrderAction(order.id, "set_completed" as any);
-                        }}
-                        className="flex-1 bg-green-50 text-green-700 border border-green-200 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"
-                      >
-                        <CheckCircle size={12}/> تعيين مكتمل
-                      </button>
-                    )}
-                    {order.status !== 'failed' && order.status !== 'rejected' && (
-                      <button
-                        disabled={isLoading}
-                        onClick={async () => {
-                          if (!confirm("تغيير الحالة إلى مرفوض؟ سيتم استرداد الرصيد للمستخدم.")) return;
-                          await handleOrderAction(order.id, "set_failed" as any);
-                        }}
-                        className="flex-1 bg-red-50 text-red-600 border border-red-200 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"
-                      >
-                        <XCircle size={12}/> تعيين مرفوض
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
         );
       })}
-      {filteredOrders.length === 0 && <div className="text-center py-12 text-gray-400"><ShoppingBag size={40} className="mx-auto mb-3 opacity-20"/><p>لا توجد طلبات</p></div>}
+      {filteredOrders.length === 0 && (
+        <div className="text-center py-14">
+          <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+            <ShoppingBag size={28} className="text-gray-300"/>
+          </div>
+          <p className="text-sm font-bold text-gray-400">لا توجد طلبات</p>
+          <p className="text-xs text-gray-300 mt-1">{orderSearch ? "جرب تغيير كلمة البحث" : "ستظهر الطلبات هنا"}</p>
+        </div>
+      )}
     </div>
   </div>
-
   );
 };
 
 const AdminTransactionsTab = ({adminTransactions, transSearch, setTransSearch, handleApproveTransaction, handleRejectTransaction}: any) => {
-  const filteredTrans = adminTransactions.filter(t => !transSearch || t.user_name?.includes(transSearch) || String(t.id).includes(transSearch));
+  const [activeFilter, setActiveFilter] = React.useState<string>("all");
   const [expandedTx, setExpandedTx] = React.useState<Set<number>>(new Set());
-  const [overrideAmounts, setOverrideAmounts] = React.useState<Record<number,string>>({});
-  const toggleTx = (id: number) => setExpandedTx(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
-  const pmTypeLabel = (type: string) => {
-    if (!type) return null;
-    const map: Record<string,string> = { manual: '📋 يدوي', syriatel: '📱 سيريتل كاش', shamcash: '💳 شام كاش' };
-    return map[type] || type;
-  };
-  return (
+  const toggleTx = (id: number) => setExpandedTx(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  const pendingTx = adminTransactions.filter((t: any) => t.status === 'pending');
+  const filterTabs = [
+    { key: "all",      label: "الكل",     count: adminTransactions.length },
+    { key: "pending",  label: "انتظار",   count: pendingTx.length },
+    { key: "approved", label: "مقبولة",   count: adminTransactions.filter((t:any) => t.status==='approved').length },
+    { key: "rejected", label: "مرفوضة",   count: adminTransactions.filter((t:any) => t.status==='rejected').length },
+  ];
+  const filteredTrans = adminTransactions.filter((t: any) => {
+    const matchSearch = !transSearch || t.user_name?.includes(transSearch) || String(t.id).includes(transSearch);
+    const matchFilter = activeFilter === "all" || t.status === activeFilter;
+    return matchSearch && matchFilter;
+  });
+
+  const statusConfig: Record<string, {label:string;bg:string;text:string;dot:string}> = {
+    approved: { label:"مقبول", bg:"bg-emerald-50", text:"text-emerald-700", dot:"bg-emerald-500" },
+    rejected: { label:"مرفوض", bg:"bg-red-50",     text:"text-red-600",     dot:"bg-red-500" },
+    pending:  { label:"انتظار", bg:"bg-amber-50",   text:"text-amber-700",   dot:"bg-amber-500" },
+  };
+
+  return (
   <div className="space-y-4">
-    <div className="relative">
-      <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-      <input type="text" placeholder="بحث في الدفعات..." value={transSearch} onChange={e => setTransSearch(e.target.value)} className="w-full bg-white border border-gray-100 rounded-xl pr-9 pl-3 py-2.5 text-xs outline-none shadow-sm"/>
+    {/* ملخص سريع */}
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="grid grid-cols-3 divide-x divide-gray-100">
+        {[
+          { label: "إجمالي", val: adminTransactions.length, color: "text-gray-800" },
+          { label: "انتظار", val: pendingTx.length, color: "text-amber-600" },
+          { label: "مقبولة", val: adminTransactions.filter((t:any)=>t.status==='approved').length, color: "text-emerald-600" },
+        ].map((s,i) => (
+          <div key={i} className="p-4 text-center">
+            <p className={`text-xl font-black ${s.color}`}>{s.val}</p>
+            <p className="text-[9px] text-gray-400 mt-0.5">{s.label}</p>
+          </div>
+        ))}
+      </div>
     </div>
-    <div className="space-y-3">
-      {filteredTrans.map(t => {
-        const isExpanded = expandedTx.has(t.id);
-        return (
-        <div key={t.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {/* معلومات المستخدم - تظهر دائماً قبل السهم */}
-          <div className="p-4">
-            <div className="flex items-center gap-3 mb-3">
-              {t.user_avatar ? (
-                <img src={t.user_avatar} className="w-10 h-10 rounded-full object-cover border-2 border-gray-100 shrink-0" referrerPolicy="no-referrer"/>
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-[var(--brand-light)] flex items-center justify-center shrink-0">
-                  <span className="text-[var(--brand)] font-bold text-sm">{(t.user_name||'?')[0]}</span>
+
+    {/* طلبات الدفع المعلقة — بارزة */}
+    {pendingTx.length > 0 && (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 px-1">
+          <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"/>
+          <p className="text-xs font-bold text-amber-700">{pendingTx.length} دفعة تنتظر مراجعتك</p>
+        </div>
+        {pendingTx.map((t: any) => (
+          <div key={t.id} className="bg-white rounded-2xl border-2 border-amber-200 shadow-sm overflow-hidden">
+            <div className="bg-amber-50 px-4 py-2.5 flex items-center justify-between border-b border-amber-100">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black text-amber-700 bg-amber-200 px-2 py-0.5 rounded-full">TX{t.id}</span>
+                <span className="text-[10px] text-amber-600">{new Date(t.created_at).toLocaleString("ar-EG", {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+              </div>
+              <span className="text-[10px] font-bold text-amber-700">⏳ انتظار مراجعة</span>
+            </div>
+            <div className="p-4 space-y-3">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="font-bold text-sm text-gray-900">{t.user_name}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{t.payment_method_name || "—"}</p>
+                </div>
+                <p className="text-xl font-black text-emerald-600">{(t.amount||0).toFixed(2)}$</p>
+              </div>
+              {t.receipt_image_url && (
+                <div className="rounded-xl overflow-hidden border border-gray-100 cursor-pointer" onClick={() => window.open(t.receipt_image_url, '_blank')}>
+                  <div className="relative">
+                    <img src={t.receipt_image_url} className="w-full h-36 object-cover" referrerPolicy="no-referrer"/>
+                    <div className="absolute inset-0 bg-black/10 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                      <span className="text-white text-xs font-bold bg-black/40 px-3 py-1 rounded-full">عرض الإيصال</span>
+                    </div>
+                  </div>
                 </div>
               )}
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm text-gray-800">{t.user_name}</p>
-                {t.user_email && <p className="text-[10px] text-gray-400 truncate">{t.user_email}</p>}
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  {t.user_login_id && <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-md font-mono">#{t.user_login_id}</span>}
-                  {t.user_phone && <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md">{t.user_phone}</span>}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${t.status==='approved'?'bg-green-100 text-green-700':t.status==='rejected'?'bg-red-100 text-red-600':'bg-amber-100 text-amber-700'}`}>
-                  {t.status==='approved'?'مقبول':t.status==='rejected'?'مرفوض':'منتظر'}
-                </span>
-                <button onClick={() => toggleTx(t.id)} className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center transition-transform" style={{transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)'}}>
-                  <ChevronDown size={13} className="text-gray-500"/>
+              {t.note && <p className="text-xs text-gray-500 bg-gray-50 rounded-xl px-3 py-2">{t.note}</p>}
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => handleApproveTransaction(t.id)} className="flex-1 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm">
+                  <CheckCircle size={15}/>قبول الدفعة
+                </button>
+                <button onClick={() => handleRejectTransaction(t.id)} className="bg-red-50 hover:bg-red-100 active:scale-95 text-red-600 px-4 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-all border border-red-200">
+                  <XCircle size={15}/>رفض
                 </button>
               </div>
             </div>
-            {/* ملخص سريع */}
-            <div className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
-              <div>
-                <p className="text-[9px] text-gray-400">المبلغ</p>
-                <p className="text-xs font-black text-green-600">{(t.amount || 0).toFixed(2)} $</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] text-gray-400">طريقة الدفع</p>
-                <p className="text-[10px] font-bold text-gray-700">{t.payment_method_name || '—'}{t.payment_method_type ? <span className="mr-1 text-[9px] text-gray-400">({pmTypeLabel(t.payment_method_type)})</span> : null}</p>
-              </div>
-            </div>
           </div>
+        ))}
+      </div>
+    )}
 
-          {/* التفاصيل - تظهر بعد فتح السهم */}
-          {isExpanded && (
-            <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-3">
-              <p className="text-[10px] font-bold text-gray-500 uppercase mb-2">تفاصيل الدفعة</p>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                  <p className="text-[9px] text-gray-400 mb-0.5">رقم العملية</p>
-                  <p className="text-xs font-black text-gray-700">TX{t.id}</p>
+    {/* شريط البحث والفلاتر */}
+    <div className="space-y-2.5">
+      <div className="relative">
+        <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+        <input type="text" placeholder="بحث باسم المستخدم أو رقم العملية..." value={transSearch} onChange={e => setTransSearch(e.target.value)} className="w-full bg-white border border-gray-100 rounded-xl pr-9 pl-3 py-2.5 text-xs outline-none shadow-sm"/>
+      </div>
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
+        {filterTabs.map(ft => (
+          <button
+            key={ft.key}
+            onClick={() => setActiveFilter(ft.key)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all shrink-0 ${activeFilter===ft.key ? 'bg-[var(--brand)] text-white shadow-sm' : 'bg-white text-gray-500 border border-gray-100'}`}
+          >
+            {ft.label}
+            {ft.count > 0 && <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${activeFilter===ft.key ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-600'}`}>{ft.count}</span>}
+          </button>
+        ))}
+      </div>
+    </div>
+
+    {/* قائمة الدفعات */}
+    <div className="space-y-2.5">
+      {filteredTrans.map((t: any) => {
+        const isExpanded = expandedTx.has(t.id);
+        const sc = statusConfig[t.status] || statusConfig['pending'];
+        return (
+          <div key={t.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <button className="w-full text-right p-4" onClick={() => toggleTx(t.id)}>
+              <div className="flex items-center gap-3">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${sc.bg}`}>
+                  <Wallet size={16} className={sc.text}/>
                 </div>
-                <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                  <p className="text-[9px] text-gray-400 mb-0.5">المبلغ المطلوب</p>
-                  <p className="text-xs font-black text-green-600">{(t.amount || 0).toFixed(2)} $</p>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-sm text-gray-900">{t.user_name}</p>
+                  <p className="text-[10px] text-gray-400">TX{t.id} · {t.payment_method_name || "—"}</p>
                 </div>
-                <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                  <p className="text-[9px] text-gray-400 mb-0.5">تاريخ الطلب</p>
-                  <p className="text-[10px] font-bold text-gray-700">{new Date(t.created_at).toLocaleDateString("ar-EG", {year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})}</p>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="text-right">
+                    <p className="font-black text-sm text-emerald-600">{(t.amount||0).toFixed(2)}$</p>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${sc.bg} ${sc.text}`}>{sc.label}</span>
+                  </div>
+                  <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}/>
                 </div>
-                <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                  <p className="text-[9px] text-gray-400 mb-0.5">طريقة الشحن</p>
-                  <p className="text-[10px] font-bold text-gray-700 truncate">{t.payment_method_name || '—'}</p>
-                  {t.payment_method_type && <p className="text-[9px] text-gray-400 mt-0.5">{pmTypeLabel(t.payment_method_type)}</p>}
+              </div>
+            </button>
+
+            {isExpanded && (
+              <div className="border-t border-gray-100">
+                <div className="grid grid-cols-2 gap-px bg-gray-100">
+                  {[
+                    { label: "رقم العملية", val: `TX${t.id}` },
+                    { label: "التاريخ", val: new Date(t.created_at).toLocaleString("ar-EG", {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) },
+                    { label: "المبلغ", val: `${(t.amount||0).toFixed(4)} $`, color: "text-emerald-700" },
+                    { label: "طريقة الدفع", val: t.payment_method_name || "—" },
+                  ].map((item, i) => (
+                    <div key={i} className="bg-white p-3">
+                      <p className="text-[9px] text-gray-400 font-bold uppercase mb-0.5">{item.label}</p>
+                      <p className={`text-xs font-bold ${(item as any).color || 'text-gray-800'}`}>{item.val}</p>
+                    </div>
+                  ))}
                 </div>
-                {t.tx_number && (
-                  <div className="bg-white rounded-xl p-2.5 border border-gray-100 col-span-2">
-                    <p className="text-[9px] text-gray-400 mb-0.5">رقم العملية البنكية</p>
-                    <p className="text-xs font-mono font-bold text-gray-700">{t.tx_number}</p>
+                {t.note && (
+                  <div className="mx-4 my-3 bg-gray-50 rounded-xl p-3">
+                    <p className="text-[9px] text-gray-400 font-bold mb-0.5">ملاحظة</p>
+                    <p className="text-xs text-gray-700">{t.note}</p>
+                  </div>
+                )}
+                {t.receipt_image_url && (
+                  <div className="px-4 pb-3">
+                    <p className="text-[9px] text-gray-400 font-bold mb-2">صورة الإيصال</p>
+                    <div className="rounded-xl overflow-hidden border border-gray-100 cursor-pointer" onClick={() => window.open(t.receipt_image_url, '_blank')}>
+                      <img src={t.receipt_image_url} className="w-full h-40 object-cover" referrerPolicy="no-referrer"/>
+                    </div>
+                  </div>
+                )}
+                {t.status === 'pending' && (
+                  <div className="flex gap-2 p-4 pt-0">
+                    <button onClick={() => handleApproveTransaction(t.id)} className="flex-1 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm">
+                      <CheckCircle size={13}/>قبول
+                    </button>
+                    <button onClick={() => handleRejectTransaction(t.id)} className="bg-red-50 text-red-600 px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border border-red-200">
+                      <XCircle size={13}/>رفض
+                    </button>
                   </div>
                 )}
               </div>
-              {t.receipt_image_url && (
-                <div>
-                  <p className="text-[9px] text-gray-400 font-bold mb-1">صورة الإيصال</p>
-                  <img src={t.receipt_image_url} className="w-full h-40 object-cover rounded-xl cursor-pointer" referrerPolicy="no-referrer" onClick={() => window.open(t.receipt_image_url, '_blank')}/>
-                </div>
-              )}
-              {t.status === 'pending' && (
-                <div className="space-y-2 pt-2 border-t border-gray-200">
-                  <div>
-                    <p className="text-[9px] text-gray-400 font-bold mb-1">تغيير المبلغ (اختياري)</p>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder={`المبلغ الحالي: ${(t.amount||0).toFixed(2)} $`}
-                      value={overrideAmounts[t.id] ?? ''}
-                      onChange={e => setOverrideAmounts(prev => ({...prev, [t.id]: e.target.value}))}
-                      className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-[var(--brand)]"
-                    />
-                    {overrideAmounts[t.id] && parseFloat(overrideAmounts[t.id]) > 0 && (
-                      <p className="text-[9px] text-amber-600 mt-1 font-bold">⚠️ سيتم إضافة {parseFloat(overrideAmounts[t.id]).toFixed(2)} $ بدلاً من {(t.amount||0).toFixed(2)} $</p>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => handleApproveTransaction(t.id, overrideAmounts[t.id])} className="flex-1 bg-green-500 text-white py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1"><CheckCircle size={13}/>قبول</button>
-                    <button onClick={() => handleRejectTransaction(t.id)} className="flex-1 bg-red-100 text-red-600 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1"><XCircle size={13}/>رفض</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
         );
       })}
-      {filteredTrans.length === 0 && <div className="text-center py-12 text-gray-400"><Wallet size={40} className="mx-auto mb-3 opacity-20"/><p>لا توجد دفعات</p></div>}
+      {filteredTrans.length === 0 && (
+        <div className="text-center py-14">
+          <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+            <Wallet size={28} className="text-gray-300"/>
+          </div>
+          <p className="text-sm font-bold text-gray-400">لا توجد دفعات</p>
+          <p className="text-xs text-gray-300 mt-1">{transSearch ? "جرب تغيير كلمة البحث" : "ستظهر الدفعات هنا"}</p>
+        </div>
+      )}
     </div>
   </div>
-
   );
 };
 
@@ -6582,16 +6624,8 @@ const AdminPanel = ({
       } catch (e) { console.error(e); }
     };
 
-    const handleApproveTransaction = async (id: number, overrideAmount?: string) => {
-      const body: any = {};
-      if (overrideAmount && parseFloat(overrideAmount) > 0) {
-        body.override_amount = parseFloat(overrideAmount);
-      }
-      await adminFetch(`/api/admin/transactions/${id}/approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
+    const handleApproveTransaction = async (id: number) => {
+      await adminFetch(`/api/admin/transactions/${id}/approve`, { method: "POST" });
       fetchAdminTransactions();
     };
 
@@ -6861,7 +6895,7 @@ const AdminPanel = ({
           {adminTab === "admin_home" && <AdminHomeTab adminUsers={adminUsers} adminOrders={adminOrders} adminTransactions={adminTransactions} setAdminTab={setAdminTab} fetchUser={fetchUser} fetchAdminUsers={fetchAdminUsers} handleToggleVip={handleToggleVip} handleBlockUser={handleBlockUser} handleDeleteUser={handleDeleteUser} handleSendNotification={handleSendNotification} onOpenChatWithUser={(u: any) => { setSelectedChatUser(u); setAdminTab("chat"); }} />}
 
           {/* ===== STATS ===== */}
-          {adminTab === "admin_stats" && <AdminStatsTab adminFetch={adminFetch} />}
+          {adminTab === "admin_stats" && <AdminStatsTab />}
 
           {adminTab === "chat" && <AdminChatView />}
 
