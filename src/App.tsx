@@ -5692,7 +5692,7 @@ const AdminHomeTab = ({adminUsers, adminOrders, adminTransactions, setAdminTab, 
   );
 };
 
-const AdminOrdersTab = ({adminOrders, orderSearch, setOrderSearch, orderDateFilter, setOrderDateFilter, fetchAdminOrders, adminFetch}: any) => {
+const AdminOrdersTab = ({adminOrders, orderSearch, setOrderSearch, orderDateFilter, setOrderDateFilter, fetchAdminOrders, adminFetch, overridePlayerIds, setOverridePlayerIds}: any) => {
   const [orderMode, setOrderMode] = React.useState<string>("manual");
   const [modeLoading, setModeLoading] = React.useState(false);
   const [modeLoaded, setModeLoaded] = React.useState(false);
@@ -5737,7 +5737,6 @@ const AdminOrdersTab = ({adminOrders, orderSearch, setOrderSearch, orderDateFilt
   };
   const pendingAdminOrders = adminOrders.filter(o => o.status === 'pending_admin');
   const filteredOrders = adminOrders.filter(o => !orderSearch || o.product_name?.includes(orderSearch) || String(o.id).includes(orderSearch) || o.user_name?.includes(orderSearch));
-  const [overridePlayerIds, setOverridePlayerIds] = React.useState<Record<number,string>>({});
   return (
 
   <div className="space-y-4">
@@ -6367,6 +6366,7 @@ const AdminPanel = ({
     const [editingGoal, setEditingGoal] = useState<any>(null);
     const [savingDiscount, setSavingDiscount] = useState(false);
     const [savingReward, setSavingReward] = useState(false);
+    const [overridePlayerIds, setOverridePlayerIds] = React.useState<Record<number,string>>({});
 
     const fetchAdminProducts = async (subId: string) => {
       if (!subId) return;
@@ -6919,7 +6919,7 @@ const AdminPanel = ({
           {adminTab === "chat" && <AdminChatView />}
 
           {/* ===== ORDERS ===== */}
-          {adminTab === "orders" && <AdminOrdersTab adminOrders={adminOrders} orderSearch={orderSearch} setOrderSearch={setOrderSearch} orderDateFilter={orderDateFilter} setOrderDateFilter={setOrderDateFilter} fetchAdminOrders={fetchAdminOrders} adminFetch={adminFetch} />}
+          {adminTab === "orders" && <AdminOrdersTab adminOrders={adminOrders} orderSearch={orderSearch} setOrderSearch={setOrderSearch} orderDateFilter={orderDateFilter} setOrderDateFilter={setOrderDateFilter} fetchAdminOrders={fetchAdminOrders} adminFetch={adminFetch} overridePlayerIds={overridePlayerIds} setOverridePlayerIds={setOverridePlayerIds} />}
 
           {/* ===== TRANSACTIONS ===== */}
           {adminTab === "transactions" && <AdminTransactionsTab adminTransactions={adminTransactions} transSearch={transSearch} setTransSearch={setTransSearch} handleApproveTransaction={handleApproveTransaction} handleRejectTransaction={handleRejectTransaction} />}
