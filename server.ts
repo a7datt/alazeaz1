@@ -2788,7 +2788,7 @@ async function startServer() {
           return res.status(400).json({ error: "لا تمتلك رصيد كافي لتنفيذ هذا الطلب" });
         }
 
-        if (product?.store_type === 'external_api' && product?.external_id) {
+        if (product?.external_id && String(product.external_id).trim() !== "") {
           if (!AHMINIX_TOKEN) {
             return res.status(500).json({ error: "AHMINIX_API_TOKEN غير مضبوط" });
           }
@@ -2807,7 +2807,11 @@ async function startServer() {
                 )
           );
           const qty = Math.max(1, Number(order.order_items?.[0]?.quantity) || 1);
-          const orderUuid = `vipronea-admin-${order.id}-${Date.now()}`;
+          // UUID v4 حقيقي — نفس منطق الـ auto flow تماماً
+          const orderUuid = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+            const r = Math.random() * 16 | 0;
+            return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+          });
 
           console.log(`[API] Admin approved order #${order.id} - sending to API`);
           const apiRes = await ahminixCreateOrder(String(product.external_id), qty, playerId, orderUuid);
