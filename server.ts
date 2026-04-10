@@ -1183,8 +1183,8 @@ async function startServer() {
 
       // حساب السعر الصحيح حسب نوع المتجر - الكمية × سعر الوحدة (دقة 7 خانات عشرية)
       const unitPrice = product.store_type === 'quantities' || product.store_type === 'external_api'
-        ? (parseFloat(parseFloat(String(product.price_per_unit || product.price || 0)).toFixed(7)))
-        : (parseFloat(parseFloat(String(product.price || 0)).toFixed(7)));
+        ? (Number(Number(String(product.price_per_unit || product.price || 0)).toFixed(7)))
+        : (Number(Number(String(product.price || 0)).toFixed(7)));
       let total = parseFloat((unitPrice * (Number(quantity) || 1)).toFixed(7));
 
       const { data: stats } = await supabase.from("user_stats").select("*").eq("user_id", userId).single();
@@ -1602,8 +1602,8 @@ async function startServer() {
 
           // السعر النهائي = سعر API × (1 + نسبة الربح%) — يُخزَّن بـ 7 خانات عشرية بالضبط
           const finalPrice = override.price && parseFloat(override.price) > 0
-            ? parseFloat(parseFloat(override.price).toFixed(7))
-            : parseFloat((basePrice * (1 + markupPercent / 100)).toFixed(7));
+            ? Number(Number(override.price).toFixed(7))
+            : Number((basePrice * (1 + markupPercent / 100)).toFixed(7));
 
           const { data: existing } = await supabase
             .from("products")
@@ -3192,7 +3192,7 @@ async function startServer() {
 
       const insertData: any = {
         subcategory_id, sub_sub_category_id: sub_sub_category_id || null,
-        name, price: parseFloat(parseFloat(price || "0").toFixed(7)),
+        name, price: Number(Number(price || "0").toFixed(7)),
         description, image_url,
         store_type: store_type || "normal",
         requires_input: requires_input || false,
@@ -3201,7 +3201,7 @@ async function startServer() {
         available: available ?? true,
         external_id: external_id || null
       };
-      if (price_per_unit !== undefined) insertData.price_per_unit = parseFloat(parseFloat(String(price_per_unit) || "0").toFixed(7));
+      if (price_per_unit !== undefined) insertData.price_per_unit = Number(Number(String(price_per_unit) || "0").toFixed(7));
 
       const { data, error } = await supabase.from("products").insert(insertData).select().single();
       if (error) throw error;
@@ -3215,8 +3215,8 @@ async function startServer() {
     try {
       const { price, price_per_unit } = req.body;
       const updateData: any = {};
-      if (price !== undefined) updateData.price = parseFloat(parseFloat(String(price)).toFixed(7));
-      if (price_per_unit !== undefined) updateData.price_per_unit = parseFloat(parseFloat(String(price_per_unit)).toFixed(7));
+      if (price !== undefined) updateData.price = Number(Number(String(price)).toFixed(7));
+      if (price_per_unit !== undefined) updateData.price_per_unit = Number(Number(String(price_per_unit)).toFixed(7));
       await supabase.from("products").update(updateData).eq("id", req.params.id);
       res.json({ success: true });
     } catch (e: any) {
@@ -3234,7 +3234,7 @@ async function startServer() {
         if (allowed.includes(k)) {
           // normalize numeric fields
           if (["price","price_per_unit"].includes(k)) {
-            updateData[k] = parseFloat(parseFloat(String(payload[k] || "0")).toFixed(7));
+            updateData[k] = Number(Number(String(payload[k] || "0")).toFixed(7));
           } else if (k === "min_quantity") {
             updateData[k] = payload[k] !== null && payload[k] !== undefined && payload[k] !== "" ? parseInt(payload[k]) : null;
           } else if (k === "requires_input" || k === "available") {
