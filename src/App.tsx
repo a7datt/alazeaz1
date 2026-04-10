@@ -331,8 +331,6 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [checkoutQuantity, setCheckoutQuantity] = useState<number>(0);
   const [checkoutOrderResult, setCheckoutOrderResult] = useState<any>(null);
-  const [checkoutPlayerInput, setCheckoutPlayerInput] = useState<string>("");
-const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -1702,7 +1700,7 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
                       <h4 className="font-bold text-gray-800">{prod.name}</h4>
                       <p className={`${theme.text} font-bold`}>
                         {prod.store_type === 'quantities'
-                          ? `${(parseFloat(prod.price_per_unit as any) || 0).toFixed(10)} $ / وحدة`
+                          ? `${(parseFloat(prod.price_per_unit as any) || 0).toFixed(7)} $ / وحدة`
                           : `${(parseFloat(prod.price as any) || 0).toFixed(2)} $`}
                       </p>
                     </div>
@@ -1718,11 +1716,9 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
                     onClick={() => {
                       if (!user) return setView({ type: "login" });
                       if (prod.store_type === 'quick_order') {
-                        setQuickOrderPlayerId("");
                         setView({ type: "quick_order", data: prod });
                       } else {
                         setCheckoutQuantity(parseInt(String(prod.min_quantity)) || 0);
-                        setCheckoutPlayerInput("");
                         setView({ type: "checkout", data: prod });
                       }
                     }}
@@ -1796,7 +1792,7 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
                   </div>
                   <p className={`${isUnavailable ? "text-gray-400" : theme.text} font-bold`}>
                     {prod.store_type === 'quantities'
-                      ? `${(parseFloat(prod.price_per_unit) || 0).toFixed(10)} $ / وحدة`
+                      ? `${(parseFloat(prod.price_per_unit) || 0).toFixed(7)} $ / وحدة`
                       : `${(parseFloat(prod.price) || 0).toFixed(2)} $`}
                   </p>
                 </div>
@@ -1814,7 +1810,6 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
                   if (isUnavailable) return;
                   if (!user) return setView({ type: "login" });
                   if (prod.store_type === 'quick_order') {
-                  setQuickOrderPlayerId("");
                     setView({ type: "quick_order", data: prod });
                   } else {
                     setCheckoutQuantity(parseInt(String(prod.min_quantity)) || 0);
@@ -1835,10 +1830,14 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
 
   const QuickOrderView = () => {
     const prod = view.data;
-    const playerId = quickOrderPlayerId;
-     const setPlayerId = setQuickOrderPlayerId;
-       const [loading, setLoading] = useState(false);
+    const [playerId, setPlayerId] = useState<string>("");
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+
+    React.useEffect(() => {
+      setPlayerId("");
+      setError("");
+    }, [prod?.id]);
 
     const finalPrice = user?.is_vip ? Number(prod.price) * 0.95 : Number(prod.price);
 
@@ -1941,24 +1940,35 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
     const [displayQty, setDisplayQty] = React.useState<string>(
       (prod.store_type === 'quantities' || prod.store_type === 'external_api') ? (String(checkoutQuantity || prod.min_quantity || 1)) : "1"
     );
+    const [playerId, setPlayerId] = React.useState<string>("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const orderResult = checkoutOrderResult;
     const setOrderResult = setCheckoutOrderResult;
 
+    React.useEffect(() => {
+      setPlayerId("");
+      setError("");
+      if (prod.store_type === 'quantities' || prod.store_type === 'external_api') {
+        setDisplayQty(String(checkoutQuantity || prod.min_quantity || 1));
+      }
+    }, [prod?.id]);
+
     // حساب السعر بشكل صحيح
     const unitPrice = (prod.store_type === 'quantities' || prod.store_type === 'external_api')
       ? (parseFloat(String(prod.price_per_unit)) || parseFloat(String(prod.price)) || 0)
       : (parseFloat(String(prod.price)) || 0);
+    const moneyDigits = (prod.store_type === 'quantities' || prod.store_type === 'external_api') ? 7 : 2;
 
     const parsedQty = parseFloat(displayQty) || 0;
     const safeQty = Math.max(1, parsedQty || 1);
     const baseTotal = unitPrice * safeQty;
     const finalPrice = user?.is_vip ? baseTotal * 0.95 : baseTotal;
+    const formatMoney = (value: number) => value.toFixed(moneyDigits);
 
     const handlePurchase = async () => {
       if (!user) return;
-      const extraData = checkoutPlayerInput || "";
+      const extraData = playerId || "";
       const quantity = parseFloat(qtyRef.current?.value || "1") || 1;
       if (prod.requires_input && !extraData) return setError("يرجى إدخال البيانات المطلوبة");
       if ((prod.store_type === 'quantities' || prod.store_type === 'external_api') && quantity < (prod.min_quantity || 1)) return setError(`أقل كمية مسموحة هي ${prod.min_quantity}`);
@@ -2091,7 +2101,7 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
           })()}
 
           <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-gray-500">المبلغ المدفوع</span><span className="font-bold text-[var(--brand)]">{finalPrice.toFixed(2)} $</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">المبلغ المدفوع</span><span className="font-bold text-[var(--brand)]">{formatMoney(finalPrice)} $</span></div>
             {orderResult.externalOrderId && <div className="flex justify-between"><span className="text-gray-500">رقم الطلب الخارجي</span><span className="font-bold text-gray-700 text-xs">{orderResult.externalOrderId}</span></div>}
           </div>
 
@@ -2182,8 +2192,11 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
               </label>
               <input
                 type="text"
-                value={checkoutPlayerInput}
-                onChange={(e) => setCheckoutPlayerInput(e.target.value)}
+                inputMode="numeric"
+                autoComplete="off"
+                enterKeyHint="done"
+                value={playerId}
+                onChange={(e) => setPlayerId(e.target.value)}
                 placeholder={`أدخل ${prod.params?.[0] || "معرف اللاعب"} هنا...`}
                 className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-blue-400 transition-colors text-center font-bold text-lg`}
               />
@@ -2209,7 +2222,7 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">سعر الوحدة</span>
               <span className="font-bold">
-                {(prod.store_type === 'quantities' || prod.store_type === 'external_api') ? unitPrice.toFixed(10) : unitPrice.toFixed(2)} $
+                {formatMoney(unitPrice)} $
               </span>
             </div>
             <div className="flex justify-between text-sm">
@@ -2218,7 +2231,7 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">المجموع الفرعي</span>
-              <span className="font-bold">{baseTotal.toFixed(2)} $</span>
+              <span className="font-bold">{formatMoney(baseTotal)} $</span>
             </div>
             {user?.is_vip && (
               <div className="flex justify-between text-sm text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100">
@@ -2226,13 +2239,13 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
                   <Star size={14} fill="currentColor" />
                   <span>خصم VIP ({siteSettings?.find((s:any)=>s.key==="vip_discount")?.value || "5"}%)</span>
                 </div>
-                <span className="font-bold">- {(baseTotal * 0.05).toFixed(2)} $</span>
+                <span className="font-bold">- {formatMoney(baseTotal * 0.05)} $</span>
               </div>
             )}
             <div className="flex justify-between text-lg border-t border-gray-100 pt-3 mt-2">
               <span className="font-bold text-gray-800">المبلغ النهائي</span>
               <div className="text-left">
-                <span className={`font-bold ${theme.text} text-xl`}>{finalPrice.toFixed(2)} $</span>
+                <span className={`font-bold ${theme.text} text-xl`}>{formatMoney(finalPrice)} $</span>
                 <p className="text-[10px] text-gray-400">شامل جميع الرسوم</p>
               </div>
             </div>
@@ -6185,7 +6198,7 @@ const AdminElementsTab = ({categories, subcategories, subSubCategories, fetchCat
               {item.image_url && <img src={item.image_url} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" referrerPolicy="no-referrer"/>}
               <div className="min-w-0">
                 <p className="text-xs font-bold text-gray-700 truncate">{item.name||item.title||item.code||`#${item.id}`}</p>
-                {item.price !== undefined && <p className="text-[10px] text-brand">{item.store_type==='quantities'?`${item.price_per_unit}$/وحدة`:`${Number(item.price).toFixed(2)} $`}</p>}
+                {item.price !== undefined && <p className="text-[10px] text-brand">{item.store_type==='quantities'?`${Number(item.price_per_unit || 0).toFixed(7)} $/وحدة`:`${Number(item.price).toFixed(2)} $`}</p>}
                 {item.amount !== undefined && !item.price && <p className="text-[10px] text-brand">{item.amount} $</p>}
               </div>
             </div>
@@ -6219,8 +6232,8 @@ const AdminElementsTab = ({categories, subcategories, subSubCategories, fetchCat
                 <AdminImageUpload label="صورة المنتج" currentUrl={editingItem.image_url||""} onUpload={url => setEditingItem({...editingItem,image_url:url})}/>
                 <select className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={editingItem.store_type||"normal"} onChange={e => setEditingItem({...editingItem,store_type:e.target.value})}><option value="normal">متجر عادي</option><option value="quick_order">طلب سريع</option><option value="quantities">متجر الكميات</option><option value="numbers">متجر الأرقام</option><option value="external_api">شحن فوري (API خارجي)</option></select>
                 {(editingItem.store_type==='quantities'||editingItem.store_type==='external_api') ? (
-                  <div className="space-y-2 p-3 bg-gray-50 rounded-xl"><input type="number" placeholder="أقل كمية" className="w-full p-2 bg-white rounded-lg text-sm outline-none" value={editingItem.min_quantity||""} onChange={e => setEditingItem({...editingItem,min_quantity:e.target.value})}/><input type="number" step="0.0000001" placeholder="سعر الوحدة" className="w-full p-2 bg-white rounded-lg text-sm outline-none" value={editingItem.price_per_unit||""} onChange={e => setEditingItem({...editingItem,price_per_unit:e.target.value})}/>{editingItem.store_type==='external_api' && <input type="text" placeholder="معرف المنتج الخارجي" className="w-full p-2 bg-white rounded-lg text-sm outline-none border border-blue-100" value={editingItem.external_id||""} onChange={e => setEditingItem({...editingItem,external_id:e.target.value})}/>}</div>
-                ) : <input type="number" step="0.0000001" placeholder="السعر $" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={editingItem.price||""} onChange={e => setEditingItem({...editingItem,price:e.target.value})}/>}
+                  <div className="space-y-2 p-3 bg-gray-50 rounded-xl"><input type="number" placeholder="أقل كمية" className="w-full p-2 bg-white rounded-lg text-sm outline-none" value={editingItem.min_quantity||""} onChange={e => setEditingItem({...editingItem,min_quantity:e.target.value})}/><input type="text" inputMode="decimal" placeholder="سعر الوحدة" className="w-full p-2 bg-white rounded-lg text-sm outline-none" value={editingItem.price_per_unit||""} onChange={e => setEditingItem({...editingItem,price_per_unit:e.target.value})}/>{editingItem.store_type==='external_api' && <input type="text" placeholder="معرف المنتج الخارجي" className="w-full p-2 bg-white rounded-lg text-sm outline-none border border-blue-100" value={editingItem.external_id||""} onChange={e => setEditingItem({...editingItem,external_id:e.target.value})}/>}</div>
+                ) : <input type="text" inputMode="decimal" placeholder="السعر $" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={editingItem.price||""} onChange={e => setEditingItem({...editingItem,price:e.target.value})}/>}
                 <div className="flex items-center gap-2"><input type="checkbox" checked={!!editingItem.requires_input} onChange={e => setEditingItem({...editingItem,requires_input:e.target.checked})} className="w-4 h-4 rounded"/><label className="text-xs font-bold text-gray-600">يتطلب بيانات إضافية</label></div>
               </div>
             )}
@@ -7073,7 +7086,7 @@ const AdminPanel = ({
                   {(newProduct.store_type === "quantities" || newProduct.store_type === "external_api") ? (
                     <div className="space-y-2 p-3 bg-gray-50 rounded-xl">
                       <input type="number" placeholder="أقل كمية" className="w-full p-2 bg-white rounded-lg text-sm outline-none" value={newProduct.min_quantity} onChange={e => setNewProduct({...newProduct, min_quantity: e.target.value})}/>
-                      <input type="number" step="0.0000001" placeholder="سعر الوحدة $" className="w-full p-2 bg-white rounded-lg text-sm outline-none" value={newProduct.price_per_unit} onChange={e => setNewProduct({...newProduct, price_per_unit: e.target.value})}/>
+                      <input type="text" inputMode="decimal" placeholder="سعر الوحدة $" className="w-full p-2 bg-white rounded-lg text-sm outline-none" value={newProduct.price_per_unit} onChange={e => setNewProduct({...newProduct, price_per_unit: e.target.value})}/>
                       {newProduct.store_type === "external_api" && (
                         <input type="text" placeholder="معرف المنتج الخارجي (external_id)" className="w-full p-2 bg-white rounded-lg text-sm outline-none border border-blue-100" value={newProduct.external_id} onChange={e => setNewProduct({...newProduct, external_id: e.target.value})}/>
                       )}
@@ -7081,7 +7094,7 @@ const AdminPanel = ({
                   ) : (
                     <div>
                       <label className="text-xs text-gray-500 mb-1 block">السعر $</label>
-                      <input type="number" step="0.0000001" placeholder="السعر $" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})}/>
+                      <input type="text" inputMode="decimal" placeholder="السعر $" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})}/>
                     </div>
                   )}
                   {/* يتطلب بيانات إضافية */}
