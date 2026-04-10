@@ -332,7 +332,10 @@ export default function App() {
   const [checkoutQuantity, setCheckoutQuantity] = useState<number>(0);
   const [checkoutOrderResult, setCheckoutOrderResult] = useState<any>(null);
   const [checkoutPlayerInput, setCheckoutPlayerInput] = useState<string>("");
-const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
+  // نستخدم ref لحفظ قيمة الـ player ID — لا تضيع عند re-render الـ parent
+  const checkoutPlayerRef = React.useRef<string>("");
+  const quickOrderPlayerRef = React.useRef<string>("");
+  const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -1814,9 +1817,12 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
                   if (isUnavailable) return;
                   if (!user) return setView({ type: "login" });
                   if (prod.store_type === 'quick_order') {
+                  quickOrderPlayerRef.current = "";
                   setQuickOrderPlayerId("");
                     setView({ type: "quick_order", data: prod });
                   } else {
+                    checkoutPlayerRef.current = "";
+                    setCheckoutPlayerInput("");
                     setCheckoutQuantity(parseInt(String(prod.min_quantity)) || 0);
                     setView({ type: "checkout", data: prod });
                   }
@@ -1835,9 +1841,7 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
 
   const QuickOrderView = () => {
     const prod = view.data;
-    // استخدام ref محلي بدل state خارجية لمنع إغلاق الكيبورد عند كل ضغطة
-    const playerIdRef = React.useRef<HTMLInputElement>(null);
-    const [playerIdVal, setPlayerIdVal] = React.useState<string>(quickOrderPlayerId || "");
+    // نستخدم الـ ref من مستوى الـ parent مباشرة — لا تضيع قيمته عند أي re-render
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
@@ -1845,7 +1849,7 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
 
     const handleQuickOrder = async () => {
       if (!user) return;
-      const playerId = playerIdRef.current?.value?.trim() || playerIdVal.trim();
+      const playerId = quickOrderPlayerRef.current?.trim() || "";
       if (!playerId) return setError("يرجى إدخال المعرف");
       
       setLoading(true);
@@ -1868,6 +1872,7 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
 
         const data = await res.json();
         if (data.success) {
+          quickOrderPlayerRef.current = "";
           setQuickOrderPlayerId("");
           fetchUser(user.id);
           setView({ type: "success", data: "تم إرسال الطلب السريع بنجاح!" });
@@ -1909,14 +1914,13 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700">ضع المعرف (ID)</label>
               <input 
-                ref={playerIdRef}
                 type="text"
                 inputMode="text"
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="none"
-                defaultValue={playerIdVal}
-                onChange={(e) => setPlayerIdVal(e.target.value)}
+                defaultValue={quickOrderPlayerRef.current}
+                onChange={(e) => { quickOrderPlayerRef.current = e.target.value; }}
                 placeholder="أدخل المعرف هنا..."
                 className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-4 text-center text-lg font-bold outline-none focus:${theme.border}`}
               />
@@ -1946,9 +1950,7 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
     const prod = view.data || (checkoutOrderResult?.prod);
     const qtyRef = React.useRef<HTMLInputElement>(null);
     const extraRef = React.useRef<HTMLInputElement>(null);
-    // ref محلي لحقل Player ID لمنع إغلاق الكيبورد
-    const playerIdRef = React.useRef<HTMLInputElement>(null);
-    const [localPlayerInput, setLocalPlayerInput] = React.useState<string>(checkoutPlayerInput || "");
+    // نستخدم checkoutPlayerRef من مستوى الـ parent — لا تضيع قيمتها عند أي re-render
     const [displayQty, setDisplayQty] = React.useState<string>(
       (prod.store_type === 'quantities' || prod.store_type === 'external_api') ? (String(checkoutQuantity || prod.min_quantity || 1)) : "1"
     );
@@ -1970,8 +1972,8 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
 
     const handlePurchase = async () => {
       if (!user) return;
-      // نقرأ Player ID من الـ ref المحلي أولاً (لمنع مشكلة الكيبورد)
-      const extraData = playerIdRef.current?.value?.trim() || localPlayerInput.trim() || checkoutPlayerInput.trim() || "";
+      // نقرأ Player ID من الـ ref المشترك مع الـ parent (لا يضيع عند re-render)
+      const extraData = checkoutPlayerRef.current?.trim() || "";
       const quantity = parseFloat(qtyRef.current?.value || String(safeQty)) || safeQty;
       if (prod.requires_input && !extraData) return setError("يرجى إدخال البيانات المطلوبة");
       if ((prod.store_type === 'quantities' || prod.store_type === 'external_api') && quantity < (prod.min_quantity || 1)) return setError(`أقل كمية مسموحة هي ${prod.min_quantity}`);
@@ -1999,6 +2001,8 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
         });
         const data = await res.json();
         if (data.success) {
+          checkoutPlayerRef.current = "";
+          setCheckoutPlayerInput("");
           fetchUser(user.id);
           if (data.pendingAdmin) {
             setView({ type: "success", data: "تم استلام طلبك بنجاح! سيتم مراجعته والرد عليك قريباً." });
@@ -2196,14 +2200,13 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
                 {prod.params?.[0] || "معرف اللاعب (Player ID)"} *
               </label>
               <input
-                ref={playerIdRef}
                 type="text"
                 inputMode="text"
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="none"
-                defaultValue={localPlayerInput}
-                onChange={(e) => setLocalPlayerInput(e.target.value)}
+                defaultValue={checkoutPlayerRef.current}
+                onChange={(e) => { checkoutPlayerRef.current = e.target.value; }}
                 placeholder={`أدخل ${prod.params?.[0] || "معرف اللاعب"} هنا...`}
                 className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-blue-400 transition-colors text-center font-bold text-lg`}
               />
@@ -2222,7 +2225,8 @@ const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="none"
-                defaultValue=""
+                defaultValue={checkoutPlayerRef.current}
+                onChange={(e) => { checkoutPlayerRef.current = e.target.value; }}
                 placeholder="أدخل البيانات هنا..."
                 className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:${theme.border} transition-colors`}
               />
