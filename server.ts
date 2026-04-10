@@ -39,6 +39,12 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const normalizeMoney7 = (value: any): number => {
+  const n = Number.parseFloat(String(value));
+  if (!Number.isFinite(n)) return 0;
+  return Number(n.toFixed(7));
+};
+
 // --- Web Push Configuration ---
 let vapidKeys = {
   publicKey: process.env.VAPID_PUBLIC_KEY!,
@@ -182,11 +188,12 @@ async function processBotOrder(chatId: number, user: any, product: any, price: n
       await supabase.rpc("increment_balance", { user_id_param: user.referred_by_id, amount_param: commission });
     }
 
-    userBot?.sendMessage(chatId, `✅ تمت عملية الشراء بنجاح!\nرقم الطلب: ${order.id}\nالمنتج: ${product.name}\nالمبلغ المخصوم: ${price.toFixed(2)}$`);
+    const priceDigits = product.store_type === "quantities" || product.store_type === "external_api" ? 7 : 2;
+    userBot?.sendMessage(chatId, `✅ تمت عملية الشراء بنجاح!\nرقم الطلب: ${order.id}\nالمنتج: ${product.name}\nالمبلغ المخصوم: ${price.toFixed(priceDigits)}$`);
 
     const adminChatId = process.env.TELEGRAM_CHAT_ID;
     if (adminChatId) {
-      const adminMsg = `🔔 طلب جديد من البوت #ORD${order.id}\nالاسم: ${user.name}\nProduct: ${product.name}\nTotal: ${price}`;
+      const adminMsg = `🔔 طلب جديد من البوت #ORD${order.id}\nالاسم: ${user.name}\nProduct: ${product.name}\nTotal: ${price.toFixed(priceDigits)}`;
       adminBot?.sendMessage(adminChatId, adminMsg);
     }
   } catch (e) {
@@ -1182,10 +1189,11 @@ async function startServer() {
       }
 
       // حساب السعر الصحيح حسب نوع المتجر
-      const unitPrice = product.store_type === 'quantities' || product.store_type === 'external_api'
+      const unitPriceRaw = product.store_type === 'quantities' || product.store_type === 'external_api'
         ? (parseFloat(product.price_per_unit) || parseFloat(product.price) || 0)
         : (parseFloat(product.price) || 0);
-      let total = unitPrice * (Number(quantity) || 1);
+      const unitPrice = normalizeMoney7(unitPriceRaw);
+      let total = normalizeMoney7(unitPrice * (Number(quantity) || 1));
 
       const { data: stats } = await supabase.from("user_stats").select("*").eq("user_id", userId).single();
       const { data: vipDiscountSetting } = await supabase.from("settings").select("value").eq("key", "vip_discount").single();
@@ -1206,7 +1214,7 @@ async function startServer() {
         }
       }
 
-      if (discountPercent > 0) total *= (1 - discountPercent / 100);
+      if (discountPercent > 0) total = normalizeMoney7(total * (1 - discountPercent / 100));
       if (user.balance < total) return res.status(400).json({ error: "Insufficient balance" });
 
       // =================== CHECK ORDER MODE (AUTO vs MANUAL) ===================
@@ -1602,8 +1610,8 @@ async function startServer() {
 
           // السعر: مخصص يدوياً أو محسوب بنسبة الربح
           const finalPrice = override.price && parseFloat(override.price) > 0
-            ? parseFloat(parseFloat(override.price).toFixed(7))
-            : parseFloat((basePrice * (1 + markupPercent / 100)).toFixed(7));
+            ? normalizeMoney7(override.price)
+            : normalizeMoney7(basePrice * (1 + markupPercent / 100));
 
           const { data: existing } = await supabase
             .from("products")
@@ -3192,7 +3200,7 @@ max_quantity: productData.max_quantity,
 
       const insertData: any = {
         subcategory_id, sub_sub_category_id: sub_sub_category_id || null,
-        name, price: parseFloat(price) || 0,
+        name, price: normalizeMoney7(price),
         description, image_url,
         store_type: store_type || "normal",
         requires_input: requires_input || false,
@@ -3201,7 +3209,7 @@ max_quantity: max_quantity ? parseInt(max_quantity) : null,
         available: available ?? true,
         external_id: external_id || null
       };
-      if (price_per_unit !== undefined) insertData.price_per_unit = parseFloat(price_per_unit) || 0;
+      if (price_per_unit !== undefined) insertData.price_per_unit = normalizeMoney7(price_per_unit);
 
       const { data, error } = await supabase.from("products").insert(insertData).select().single();
       if (error) throw error;
@@ -3215,8 +3223,8 @@ max_quantity: max_quantity ? parseInt(max_quantity) : null,
     try {
       const { price, price_per_unit } = req.body;
       const updateData: any = {};
-      if (price !== undefined) updateData.price = price;
-      if (price_per_unit !== undefined) updateData.price_per_unit = price_per_unit;
+      if (price !== undefined) updateData.price = normalizeMoney7(price);
+      if (price_per_unit !== undefined) updateData.price_per_unit = normalizeMoney7(price_per_unit);
       await supabase.from("products").update(updateData).eq("id", req.params.id);
       res.json({ success: true });
     } catch (e: any) {
@@ -3234,7 +3242,7 @@ max_quantity: max_quantity ? parseInt(max_quantity) : null,
         if (allowed.includes(k)) {
           // normalize numeric fields
           if (["price","price_per_unit"].includes(k)) {
-            updateData[k] = parseFloat(payload[k]) || 0;
+            updateData[k] = normalizeMoney7(payload[k]);
           } else if (k === "min_quantity") {
             updateData[k] = payload[k] !== null && payload[k] !== undefined && payload[k] !== "" ? parseInt(payload[k]) : null;
           } else if (k === "requires_input" || k === "available") {
