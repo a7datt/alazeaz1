@@ -2514,7 +2514,7 @@ export default function App() {
                       <h4 className="font-bold text-gray-800">{prod.name}</h4>
                       <p className={`${theme.text} font-bold`}>
                         {prod.store_type === 'quantities'
-                          ? `${(parseFloat(prod.price_per_unit as any) || 0).toFixed(6)} $ / وحدة`
+                          ? `${(parseFloat(prod.price as any) || 0).toFixed(6)} $ / وحدة`
                           : `${(parseFloat(prod.price as any) || 0).toFixed(2)} $`}
                       </p>
                     </div>
@@ -2644,7 +2644,7 @@ export default function App() {
                   )}
                   <p className={`${isUnavailable ? "text-gray-400" : theme.text} font-bold text-sm mt-1`}>
                     {isQuantity
-                      ? `${(parseFloat(prod.price_per_unit) || 0).toFixed(6)} $ / وحدة`
+                      ? `${(parseFloat(prod.price) || 0).toFixed(6)} $ / وحدة`
                       : `${(parseFloat(prod.price) || 0).toFixed(2)} $`}
                   </p>
                 </div>
@@ -2800,9 +2800,9 @@ export default function App() {
     const setOrderResult = setCheckoutOrderResult;
 
     // حساب السعر بشكل صحيح
-    const unitPrice = (prod.store_type === 'quantities' || prod.store_type === 'external_api')
-      ? (parseFloat(String(prod.price_per_unit)) || parseFloat(String(prod.price)) || 0)
-      : (parseFloat(String(prod.price)) || 0);
+    // price = سعر البيع النهائي (سعر API + نسبة الربح) — يُستخدم دائماً للعرض والخصم
+    // price_per_unit = سعر التكلفة من API فقط (للتقارير الداخلية)
+    const unitPrice = parseFloat(String(prod.price)) || 0;
 
     const parsedQty = parseFloat(displayQty) || 0;
     const safeQty = Math.max(1, parsedQty || 1);
