@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, Component } from "react";
+import React, { useState, useEffect, Component, useCallback, useRef } from "react";
 import { 
   Home, 
   Wallet, 
   ShoppingBag, 
   User, 
+  UserCircle,
   Bell, 
   Menu, 
   ChevronRight, 
@@ -52,6 +53,7 @@ import {
   Paperclip,
   Bot,
   Zap,
+  Trophy,
   Share2,
   HelpCircle,
   Info,
@@ -67,8 +69,12 @@ import {
   Filter,
   RefreshCcw,
   DollarSign,
-  Moon,
   Sun,
+  Moon,
+  Shield,
+  Gift,
+  Headphones,
+  Link2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -149,16 +155,16 @@ const AdminLoginView = ({ setIsAdmin, setAdminAuth, setView }: AdminLoginViewPro
         const contentType = res.headers.get("content-type");
         if (contentType && contentType.includes("application/json")) {
           const data = await res.json();
-          alert(data.error || "كلمة مرور خاطئة");
+          showToast(data.error || "كلمة مرور خاطئة", 'error');
         } else {
-          alert("كلمة مرور خاطئة");
+          showToast("كلمة مرور خاطئة", 'error');
         }
       }
     } catch (e: any) {
       if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
-        alert("فشل الاتصال بالسيرفر (تأكد من اتصالك بالإنترنت)");
+        showToast("فشل الاتصال بالسيرفر (تأكد من اتصالك بالإنترنت)", 'error');
       } else {
-        alert("فشل الاتصال بالسيرفر");
+        showToast("فشل الاتصال بالسيرفر", 'error');
       }
     } finally {
       setLoading(false);
@@ -284,10 +290,10 @@ export class ErrorBoundary extends (Component as any) {
         if (data.success) {
           onUpload(data.data.url);
         } else {
-          alert("فشل الرفع: " + (data.error?.message || "خطأ غير معروف"));
+          showToast("فشل الرفع: " + (data.error?.message || "خطأ غير معروف"), 'error');
         }
       } catch (err) {
-        alert("خطأ في الاتصال بخادم الصور");
+        showToast("خطأ في الاتصال بخادم الصور", 'error');
       } finally {
         setUploading(false);
       }
@@ -312,18 +318,379 @@ export class ErrorBoundary extends (Component as any) {
         </div>
         {currentUrl && (
           <div className="w-16 h-16 rounded-lg border border-gray-100 overflow-hidden bg-gray-50">
-            <img src={currentUrl} className="w-full h-full object-cover" alt="Preview" referrerPolicy="no-referrer" />
+            <img loading="lazy" src={currentUrl} className="w-full h-full object-cover" alt="Preview" referrerPolicy="no-referrer" />
           </div>
         )}
       </div>
     );
   };
 
+// ===================== TOAST SYSTEM =====================
+type ToastType = 'success' | 'error' | 'info';
+interface Toast { id: number; message: string; type: ToastType; }
+
+let toastIdCounter = 0;
+let globalShowToast: ((msg: string, type?: ToastType) => void) | null = null;
+
+export function showToast(msg: string, type: ToastType = 'info') {
+  if (globalShowToast) globalShowToast(msg, type);
+}
+
+const ToastContainer = () => {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  useEffect(() => {
+    globalShowToast = (msg, type = 'info') => {
+      const id = ++toastIdCounter;
+      setToasts(prev => [...prev, { id, message: msg, type }]);
+      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500);
+    };
+    return () => { globalShowToast = null; };
+  }, []);
+  const colors: Record<ToastType, string> = {
+    success: 'bg-green-500',
+    error: 'bg-red-500',
+    info: 'bg-blue-500',
+  };
+  const iconMap: Record<ToastType, React.ReactNode> = {
+    success: <CheckCircle size={16} className="shrink-0" />,
+    error:   <XCircle    size={16} className="shrink-0" />,
+    info:    <Info       size={16} className="shrink-0" />,
+  };
+  return (
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2 items-center pointer-events-none" style={{minWidth:'260px',maxWidth:'90vw'}}>
+      {toasts.map(t => (
+        <div key={t.id} className={`${colors[t.type]} text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2 text-sm font-bold`}
+          style={{animation:'toastIn 0.3s ease, toastOut 0.4s ease 3.1s forwards'}}>
+          {iconMap[t.type]}
+          <span>{t.message}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+// ===================== END TOAST SYSTEM =====================
+
+// ===================== CUSTOM DIALOG SYSTEM =====================
+interface DialogConfig {
+  type: 'confirm' | 'prompt';
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  inputLabel?: string;
+  inputDefault?: string;
+  inputPlaceholder?: string;
+  onConfirm: (value?: string) => void;
+  onCancel?: () => void;
+  danger?: boolean;
+}
+let globalShowDialog: ((cfg: DialogConfig) => void) | null = null;
+
+export function showDialog(cfg: DialogConfig) {
+  if (globalShowDialog) globalShowDialog(cfg);
+}
+
+export function showConfirm(message: string, title: string, onConfirm: () => void, danger = false) {
+  showDialog({ type: 'confirm', title, message, confirmText: 'تأكيد', cancelText: 'إلغاء', onConfirm, danger });
+}
+
+export function showPromptDialog(message: string, title: string, onConfirm: (val: string) => void, inputDefault = '', inputPlaceholder = '') {
+  showDialog({ type: 'prompt', title, message, confirmText: 'تأكيد', cancelText: 'إلغاء', inputDefault, inputPlaceholder, onConfirm });
+}
+
+const CustomDialogContainer = () => {
+  const [dialog, setDialog] = useState<DialogConfig | null>(null);
+  const [inputValue, setInputValue] = useState('');
+  useEffect(() => {
+    globalShowDialog = (cfg) => {
+      setInputValue(cfg.inputDefault || '');
+      setDialog(cfg);
+    };
+    return () => { globalShowDialog = null; };
+  }, []);
+  if (!dialog) return null;
+  const handleConfirm = () => {
+    dialog.onConfirm(dialog.type === 'prompt' ? inputValue : undefined);
+    setDialog(null);
+  };
+  const handleCancel = () => {
+    if (dialog.onCancel) dialog.onCancel();
+    setDialog(null);
+  };
+  return (
+    <div className="fixed inset-0 z-[9998] flex items-end justify-center" style={{backdropFilter:'blur(2px)',WebkitBackdropFilter:'blur(2px)',background:'rgba(0,0,0,0.35)'}}>
+      <div className="bg-white w-full max-w-sm rounded-t-3xl shadow-2xl p-6 space-y-4 animate-slideUp" style={{animation:'slideUpDialog 0.25s ease'}}>
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg flex-shrink-0 ${dialog.danger ? 'bg-red-100' : 'bg-brand-light'}`}>
+            {dialog.danger ? '⚠️' : dialog.type === 'prompt' ? '✏️' : '❓'}
+          </div>
+          <div>
+            <h3 className={`font-bold text-base ${dialog.danger ? 'text-red-700' : 'text-gray-800'}`}>{dialog.title}</h3>
+            <p className="text-gray-500 text-sm leading-snug">{dialog.message}</p>
+          </div>
+        </div>
+        {dialog.type === 'prompt' && (
+          <input
+            autoFocus
+            type="text"
+            value={inputValue}
+            onChange={e => setInputValue(e.target.value)}
+            placeholder={dialog.inputPlaceholder || ''}
+            className="w-full border border-gray-200 rounded-2xl px-4 py-3 text-sm outline-none focus:border-brand shadow-sm"
+            onKeyDown={e => { if (e.key === 'Enter') handleConfirm(); }}
+          />
+        )}
+        <div className="flex gap-3">
+          <button onClick={handleCancel} className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-2xl font-bold text-sm">
+            {dialog.cancelText || 'إلغاء'}
+          </button>
+          <button onClick={handleConfirm} className={`flex-1 py-3 rounded-2xl font-bold text-sm text-white ${dialog.danger ? 'bg-red-500' : 'bg-brand'}`}>
+            {dialog.confirmText || 'تأكيد'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+// ===================== END CUSTOM DIALOG SYSTEM =====================
+
+// ===================== WALLET CHARGE VIEW (كل الـ state داخله لمنع إغلاق الكيبورد) =====================
+interface WalletChargeViewProps {
+  user: any;
+  paymentMethods: PaymentMethod[];
+  showToast: (msg: string, type: 'success'|'error'|'info') => void;
+  setView: (v: any) => void;
+  fetchUser: (id: number) => void;
+  fetchTransactions: () => void;
+}
+
+// React.memo يمنع إعادة رسم المكوّن عند أي تحديث خارجي لا يخصه
+const WalletChargeView: React.FC<WalletChargeViewProps> = React.memo(({
+  user, paymentMethods, showToast, setView, fetchUser, fetchTransactions,
+}) => {
+  const [selectedMethod, setSelectedMethodState] = React.useState<PaymentMethod | null>(null);
+  const [walletAmount, setWalletAmount] = React.useState("");
+  const [walletNote, setWalletNote] = React.useState("");
+  const [walletReceiptUrl, setWalletReceiptUrl] = React.useState("");
+  const [walletUploading, setWalletUploading] = React.useState(false);
+  const [walletTxNumber, setWalletTxNumber] = React.useState("");
+  const [walletLoading, setWalletLoading] = React.useState(false);
+
+  const setSelectedMethod = (m: PaymentMethod | null) => {
+    setSelectedMethodState(m);
+    if (!m) {
+      setWalletAmount(""); setWalletNote(""); setWalletReceiptUrl(""); setWalletTxNumber("");
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setWalletUploading(true);
+    const formData = new FormData();
+    formData.append("image", file);
+    try {
+      const imgbbKey = (import.meta as any).env.VITE_IMGBB_API_KEY || "97ffbf56fe1a203445531d664cd4b928";
+      const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbKey}`, { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.success) { setWalletReceiptUrl(data.data.url); }
+      else { showToast("فشل رفع الصورة: " + (data.error?.message || "خطأ غير معروف"), 'error'); }
+    } catch { showToast("خطأ في الاتصال بخادم الصور", 'error'); }
+    finally { setWalletUploading(false); }
+  };
+
+  const clearReceipt = (e: React.MouseEvent) => { e.stopPropagation(); e.preventDefault(); setWalletReceiptUrl(""); };
+
+  const handleAutoTopUp = async () => {
+    if (!user || !selectedMethod || !walletAmount || !walletTxNumber) {
+      showToast("يرجى إدخال المبلغ ورقم العملية", 'error'); return;
+    }
+    setWalletLoading(true);
+    try {
+      const res = await fetch("/api/transactions/verify-auto", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("authToken") || ""}` },
+        body: JSON.stringify({ userId: user.id, paymentMethodId: selectedMethod.id, amount: parseFloat(walletAmount), txNumber: walletTxNumber.trim() })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchUser(user.id); fetchTransactions();
+        const added = data.addedUsd ?? parseFloat(walletAmount);
+        const orig = data.originalAmount ? ` (${data.originalAmount} ${data.currency})` : "";
+        setView({ type: "success", data: `✅ تم شحن ${added.toFixed(4)}$${orig} بنجاح عبر ${selectedMethod.name}!` });
+      } else { showToast(data.error || "فشل التحقق", 'error'); }
+    } catch { showToast("فشل الاتصال بالخادم", 'error'); }
+    finally { setWalletLoading(false); }
+  };
+
+  const handleTopUp = async () => {
+    if (!user || !selectedMethod || !walletAmount || !walletReceiptUrl) {
+      showToast("يرجى إكمال جميع البيانات ورفع الإيصال", 'error'); return;
+    }
+    const numAmount = parseFloat(walletAmount);
+    if (numAmount < selectedMethod.min_amount) {
+      showToast(`أقل مبلغ للشحن عبر هذه الطريقة هو ${selectedMethod.min_amount} $`, 'error'); return;
+    }
+    setWalletLoading(true);
+    try {
+      const res = await fetch("/api/transactions/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("authToken") || ""}` },
+        body: JSON.stringify({ userId: user.id, paymentMethodId: selectedMethod.id, amount: numAmount, note: walletNote, receiptImageUrl: walletReceiptUrl })
+      });
+      const data = await res.json();
+      if (data.success) { setView({ type: "success", data: "تم إرسال طلب الشحن بنجاح، يرجى انتظار التحقق." }); fetchTransactions(); }
+      else { showToast(data.error || "فشل إرسال الطلب", 'error'); }
+    } catch (e) { showToast("فشل الاتصال بالخادم، يرجى المحاولة لاحقاً", 'error'); console.error(e); }
+    finally { setWalletLoading(false); }
+  };
+
+  if (selectedMethod) {
+    const isAuto = selectedMethod.method_type === 'syriatel' || selectedMethod.method_type === 'shamcash';
+    return (
+      <div className="px-4 space-y-6 pb-20">
+        <div className="flex items-center gap-2 mb-6">
+          <button onClick={() => setSelectedMethod(null)} className="p-2 bg-gray-100 rounded-full">
+            <ArrowRight size={20} className="text-gray-600" />
+          </button>
+          <h2 className="text-xl font-bold text-gray-800">شحن عبر {selectedMethod.name}</h2>
+        </div>
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-6">
+          {isAuto ? (
+            <>
+              <div className="bg-green-50 p-4 rounded-xl border border-green-100 text-center space-y-1">
+                <p className="text-green-700 font-bold text-sm">✅ شحن تلقائي فوري</p>
+                <p className="text-green-600 text-xs">يتم التحقق من العملية تلقائياً وإضافة الرصيد فوراً {"\n"}في حال كانت العملية بالليرة السورية سيتم تعبئة رصيد بـ1$ لكل 120 ل.س جديدو</p>
+              </div>
+              <div className="bg-brand-light p-4 rounded-xl border border-brand-soft text-center">
+                <p className="text-brand text-xs mb-1">{selectedMethod.method_type === 'syriatel' ? 'رقم سيريتل كاش' : 'عنوان شام كاش'}</p>
+                <p className="text-xl font-bold text-brand tracking-wider">{selectedMethod.wallet_address}</p>
+                {selectedMethod.min_amount > 0 && <p className="text-xs text-brand mt-2 font-bold">أقل مبلغ: {selectedMethod.min_amount} $</p>}
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700">اكتب قيمة المبلغ المرسل ان كان $ او ل.س </label>
+                  <input type="text" inputMode="decimal" value={walletAmount} onChange={e => setWalletAmount(e.target.value)} placeholder="0.00"
+                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700">رقم العملية (Transaction ID)</label>
+                  <input type="text" value={walletTxNumber} onChange={e => setWalletTxNumber(e.target.value)}
+                    placeholder={selectedMethod.method_type === 'syriatel' ? 'مثال: 123456789' : 'مثال: 987654321'}
+                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand font-mono" />
+                  <p className="text-xs text-gray-400">أدخل رقم العملية كما يظهر في تطبيق {selectedMethod.name}</p>
+                </div>
+                <button disabled={walletLoading || !walletTxNumber || !walletAmount} onClick={handleAutoTopUp}
+                  className="w-full bg-brand text-white py-4 rounded-xl font-bold shadow-lg shadow-brand-soft disabled:opacity-50">
+                  {walletLoading ? "جاري التحقق..." : "تحقق وشحن فوراً"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="bg-brand-light p-4 rounded-xl border border-brand-soft text-center space-y-2">
+                <p className="text-brand text-xs font-semibold mb-1">رقم المحفظة / العنوان</p>
+                <div className="flex items-center justify-center gap-2 flex-wrap">
+                  <p className="text-sm font-bold text-brand tracking-wider break-all">{selectedMethod.wallet_address}</p>
+                  <button onClick={() => { navigator.clipboard.writeText(selectedMethod.wallet_address).then(() => showToast("تم نسخ عنوان المحفظة!", 'success')).catch(() => showToast("فشل النسخ", 'error')); }}
+                    className="flex items-center gap-1 bg-brand text-white text-[10px] font-bold px-2 py-1 rounded-lg shrink-0">
+                    <Copy size={11} /> نسخ
+                  </button>
+                </div>
+                <p className="text-[10px] text-brand/70 font-medium">طريقة الدفع: {selectedMethod.name}</p>
+                {selectedMethod.description && <p className="text-xs text-brand/60 font-light mt-1">{selectedMethod.description}</p>}
+                {selectedMethod.min_amount > 0 && <p className="text-xs text-brand mt-1 font-bold">أقل مبلغ: {selectedMethod.min_amount} $</p>}
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700">المبلغ المراد شحنه</label>
+                  <input type="text" inputMode="decimal" value={walletAmount} onChange={e => setWalletAmount(e.target.value)} placeholder="0.00"
+                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700">ملاحظات إضافية</label>
+                  <textarea value={walletNote} onChange={e => setWalletNote(e.target.value)} placeholder="اختياري..."
+                    className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand h-24 resize-none" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700">إرفاق صورة الإيصال</label>
+                  <label className="w-full h-32 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-2 text-gray-400 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors relative overflow-hidden">
+                    {walletReceiptUrl ? (
+                      <>
+                        <img loading="lazy" src={walletReceiptUrl} className="w-full h-full object-cover" alt="Receipt" referrerPolicy="no-referrer" />
+                        <button onClick={clearReceipt} className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-colors z-10"><X size={16} /></button>
+                      </>
+                    ) : (
+                      <>
+                        <ImageIcon size={32} />
+                        <span className="text-xs">{walletUploading ? "جاري الرفع..." : "اضغط لرفع الصورة"}</span>
+                      </>
+                    )}
+                    <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={walletUploading} />
+                  </label>
+                </div>
+                <button disabled={walletLoading || walletUploading || !walletReceiptUrl} onClick={handleTopUp}
+                  className="w-full bg-brand text-white py-4 rounded-xl font-bold shadow-lg shadow-brand-soft disabled:opacity-50">
+                  {walletLoading ? "جاري الإرسال..." : "إرسال طلب التحقق"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 space-y-6 pb-20">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">شحن الرصيد</h2>
+      <button onClick={() => setView({ type: "voucher_redeem" })}
+        className="w-full bg-gradient-to-r from-brand to-brand-soft p-6 rounded-2xl text-white shadow-lg shadow-brand-soft flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center"><Ticket size={28} /></div>
+          <div className="text-right">
+            <h3 className="font-bold text-lg">استرداد كود رصيد</h3>
+            <p className="text-white/80 text-xs">اشحن رصيدك عبر الأكواد والقسائم</p>
+          </div>
+        </div>
+        <ChevronRight size={24} className="text-white/60" />
+      </button>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-bold text-gray-800">طرق الشحن المباشر</h3>
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        {paymentMethods.map(method => (
+          <button key={method.id} onClick={() => setSelectedMethod(method)}
+            className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden hover:border-brand-soft transition-colors active:scale-95">
+            <div className="w-full flex items-center justify-center bg-gray-50 py-1.5">
+              <div className="w-3/4 aspect-square overflow-hidden rounded-lg">
+                <img loading="lazy" src={method.image_url || "https://picsum.photos/seed/pay/100/100"} alt={method.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              </div>
+            </div>
+            <div className="px-1.5 py-1.5">
+              <span className="font-bold text-gray-800 text-[9px] text-center block leading-tight">{method.name}</span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+// إغلاق React.memo
+}, (prevProps, nextProps) => {
+  // نعيد الرسم فقط عند تغيير paymentMethods أو user.id أو user.balance
+  // هذا يمنع إعادة رسم المكوّن عند تحديث بيانات المستخدم الأخرى
+  if (prevProps.paymentMethods !== nextProps.paymentMethods) return false;
+  if (prevProps.user?.id !== nextProps.user?.id) return false;
+  if (prevProps.user?.balance !== nextProps.user?.balance) return false;
+  return true;
+});
+// ===================== END WALLET CHARGE VIEW =====================
+
 export default function App() {
   const [activeTab, setActiveTab] = useState("home");
   const [user, setUser] = useState<UserData | null>(null);
   const [userStats, setUserStats] = useState<any>(null);
-  const [view, setView] = useState<{ type: string; id?: number; data?: any; catId?: number; fromSubSub?: boolean; subId?: number; subName?: string }>({ type: "main" });
+  const [view, setView] = useState<{ type: string; id?: number; data?: any; catId?: number; fromSubSub?: boolean; subId?: number; subName?: string; fromFav?: boolean }>({ type: "main" });
   const [pageLoading, setPageLoading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
@@ -331,12 +698,6 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [checkoutQuantity, setCheckoutQuantity] = useState<number>(0);
   const [checkoutOrderResult, setCheckoutOrderResult] = useState<any>(null);
-  const [checkoutPlayerInput, setCheckoutPlayerInput] = useState<string>("");
-  // نستخدم ref لحفظ قيمة الـ player ID — لا تضيع عند re-render الـ parent
-  const checkoutPlayerRef = React.useRef<string>("");
-  const quickOrderPlayerRef = React.useRef<string>("");
-  const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -353,9 +714,10 @@ export default function App() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [siteSettings, setSiteSettings] = useState<any[]>([]);
-  const [tickerText, setTickerText] = useState("");
   const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem("theme") === "dark");
   const [voucherCode, setVoucherCode] = useState("");
+  // ── Wallet charge form states (رُفعت هنا لمنع ضياع البيانات عند إعادة الرسم) ──
+  // wallet state moved inside WalletChargeView for keyboard stability
   const [isBlocked, setIsBlocked] = useState(false);
   const [blockCountdown, setBlockCountdown] = useState(0);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -366,11 +728,125 @@ export default function App() {
     timeLeft: 0
   });
 
+  // ===== HOME SORT MODE & FAVORITES =====
+  const [homeSortMode, setHomeSortMode] = useState<"categories" | "most_purchased" | "favorites">("categories");
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [mostPurchased, setMostPurchased] = useState<any[]>([]);
+  const [mostPurchasedLoading, setMostPurchasedLoading] = useState(false);
+  const [favorites, setFavorites] = useState<any[]>(() => {
+    try { return JSON.parse(localStorage.getItem("vipro_favorites") || "[]"); } catch { return []; }
+  });
+  const [longPressTarget, setLongPressTarget] = useState<any | null>(null);
+  const [longPressPos, setLongPressPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // ===== ONBOARDING TUTORIAL STATE =====
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
+
+  // ===== CUSTOM DIALOG STATE =====
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  // ===== NAVIGATION HISTORY STACK =====
+  const [viewHistory, setViewHistory] = useState<any[]>([]);
+
+  const navigateTo = useCallback((newView: any) => {
+    setViewHistory(prev => [...prev, newView]);
+    setView(newView);
+  }, []);
+
+  const navigateBack = useCallback(() => {
+    setViewHistory(prev => {
+      if (prev.length <= 1) {
+        setView({ type: "main" });
+        setActiveTab("home");
+        return [];
+      }
+      const currentView = prev[prev.length - 1];
+      // إذا وصلنا للصفحة الحالية عبر most_purchased نرجع للرئيسية مباشرة
+      if (currentView?.fromMostPurchased) {
+        setView({ type: "main" });
+        setActiveTab("home");
+        setHomeSortMode("categories");
+        return [];
+      }
+      const newHistory = prev.slice(0, -1);
+      const prevView = newHistory[newHistory.length - 1];
+      setView(prevView);
+      return newHistory;
+    });
+  }, []);
+
+  // ===== PULL TO REFRESH =====
+  const pullStartY = useRef(0);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // حفظ المفضلة في localStorage عند التغيير
+  useEffect(() => {
+    localStorage.setItem("vipro_favorites", JSON.stringify(favorites));
+  }, [favorites]);
+
+  const addToFavorites = (item: any) => {
+    setFavorites(prev => {
+      const exists = prev.some(f => f._fav_key === item._fav_key);
+      if (exists) return prev;
+      return [...prev, item];
+    });
+    setLongPressTarget(null);
+  };
+
+  const removeFromFavorites = (favKey: string) => {
+    setFavorites(prev => prev.filter(f => f._fav_key !== favKey));
+  };
+
+  const isFavorite = (favKey: string) => favorites.some(f => f._fav_key === favKey);
+
+  const fetchMostPurchased = async () => {
+    if (mostPurchasedLoading) return;
+    setMostPurchasedLoading(true);
+    try {
+      const token = localStorage.getItem("authToken") || "";
+      const res = await fetch("/api/most-purchased", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setMostPurchased(data || []);
+      }
+    } catch {}
+    setMostPurchasedLoading(false);
+  };
+
+  // useLongPress helper داخلي
+  const useLongPressHandlers = (item: any, e: React.TouchEvent | React.MouseEvent) => {
+    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    setLongPressTarget(item);
+    setLongPressPos({ x: rect.left + rect.width / 2, y: rect.top });
+  };
+  // ===== END HOME SORT MODE & FAVORITES =====
+
   // Theme effect
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
+      // أظهر الإشعار كل 5 جلسات فقط وليس كل جلسة
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+      if (!isStandalone) {
+        const sessionKey = "vipro_install_session";
+        const lastShownKey = "vipro_install_last_session";
+        // رقم الجلسة الحالية
+        const currentSession = parseInt(sessionStorage.getItem(sessionKey) || "0");
+        if (currentSession === 0) {
+          // جلسة جديدة — زد العداد في localStorage
+          const totalSessions = parseInt(localStorage.getItem(lastShownKey) || "0") + 1;
+          localStorage.setItem(lastShownKey, String(totalSessions));
+          sessionStorage.setItem(sessionKey, String(totalSessions));
+          // أظهر فقط إذا كانت الجلسة مضاعف 5
+          if (totalSessions % 5 === 1 || totalSessions === 1) {
+            setTimeout(() => setShowInstallBanner(true), 2000);
+          }
+        }
+      }
     };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -446,10 +922,9 @@ export default function App() {
       supabase.channel('banners-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'banners' }, fetchBanners).subscribe(),
       supabase.channel('offers-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'offers' }, fetchOffers).subscribe(),
       supabase.channel('settings-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => {
-        // لا نعيد تحميل الصفحة إذا كان المستخدم في لوحة التحكم
-        if (!document.querySelector('[data-admin-panel]')) {
-          window.location.reload();
-        }
+        // لا نعيد تحميل الصفحة أبداً - نكتفي بتحديث الإعدادات بهدوء
+        // window.location.reload() محذوف نهائياً لأنه يُخرج المستخدم من صفحة الدفع
+        fetchSiteSettings();
       }).subscribe(),
     ];
 
@@ -529,6 +1004,43 @@ export default function App() {
     });
   };
 
+  // ===== BACK BUTTON (popstate) =====
+  useEffect(() => {
+    const handlePopState = () => {
+      if (view.type !== 'main') {
+        navigateBack();
+        window.history.pushState(null, '', window.location.href);
+      } else if (activeTab !== 'home') {
+        setActiveTab('home');
+        window.history.pushState(null, '', window.location.href);
+      }
+    };
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [view, activeTab, navigateBack]);
+
+  // ===== PULL TO REFRESH (DISABLED) =====
+  useEffect(() => {
+    if (activeTab !== 'home') return;
+    const onTouchStart = (_e: TouchEvent) => {};
+    const onTouchMove = (_e: TouchEvent) => {};
+    const onTouchEnd = async () => {
+      if (false) {
+        setPullDistance(0);
+        setIsPulling(false);
+      }
+    };
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: true });
+    document.addEventListener('touchend', onTouchEnd);
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [activeTab, pullDistance, isRefreshing]);
+
   // Fetch initial data
   useEffect(() => {
     fetchCategories();
@@ -543,6 +1055,43 @@ export default function App() {
       fetchUser(Number(savedUserId));
     }
 
+    // Handle Google OAuth redirect callback (hash fragment contains access_token)
+    const handleGoogleRedirectCallback = async () => {
+      const hash = window.location.hash;
+      if (!hash.includes('access_token')) return;
+      const params = new URLSearchParams(hash.replace('#', ''));
+      const accessToken = params.get('access_token');
+      const state = params.get('state');
+      if (!accessToken || state !== 'google_oauth') return;
+
+      // Clean URL immediately
+      window.history.replaceState(null, '', window.location.pathname);
+
+      try {
+        const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        if (!profileRes.ok) return;
+        const profile = await profileRes.json();
+
+        const res = await fetch('/api/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken, googleId: profile.sub, email: profile.email, name: profile.name, picture: profile.picture })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setUser(data);
+          if (data.token) localStorage.setItem('authToken', data.token);
+          localStorage.setItem('userId', String(data.id));
+          setView({ type: 'main' });
+          setActiveTab('home');
+          if (data.isNew) { setOnboardingStep(0); setShowOnboarding(true); }
+        }
+      } catch { /* silent */ }
+    };
+    handleGoogleRedirectCallback();
+
     // Handle referral code from URL
     const urlParams = new URLSearchParams(window.location.search);
     const ref = urlParams.get('ref');
@@ -554,7 +1103,7 @@ export default function App() {
     }
 
     // Handle Admin Route — استعادة الجلسة إن وُجد توكن محفوظ
-    if (window.location.pathname === "/adminalazeaz1.7v") {
+    if (window.location.pathname === "/adminvipa7d1216") {
       const savedAdminToken = localStorage.getItem("adminToken");
       if (savedAdminToken) {
         // تحقق من صلاحية التوكن قبل الدخول المباشر
@@ -622,7 +1171,8 @@ export default function App() {
           title: 'تم ربط حسابك ببوت تلجرام',
           message: 'لقد تم ربط حسابك ببوت تلجرام. إن لم تكن أنت، يرجى الضغط على فك الارتباط وتغيير بياناتك.',
           type: 'warning',
-          action: 'unlink'
+          action: 'unlink',
+          is_read: false
         });
       }
       setNotifications(serverNotifs);
@@ -643,33 +1193,62 @@ export default function App() {
   }, [user, isAdmin]);
 
   const markNotificationRead = async (id: number | string) => {
-    if (typeof id === 'string') return; // Local notifs
+    // Optimistic update - mark as read in local state immediately
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    if (typeof id === 'string') return; // Local notifs - no API call needed
     try {
       await fetch("/api/notifications/mark-read", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("authToken") || ""}` },
         body: JSON.stringify({ notificationId: id })
       });
+      // Re-fetch to sync with server
       fetchNotifications();
     } catch (e) {
       console.error(e);
     }
   };
 
+  const markAllNotificationsRead = async () => {
+    const unread = (Array.isArray(notifications) ? notifications : []).filter(n => !n.is_read);
+    // Optimistic update
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    for (const n of unread) {
+      if (typeof n.id !== 'string') {
+        try {
+          await fetch("/api/notifications/mark-read", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("authToken") || ""}` },
+            body: JSON.stringify({ notificationId: n.id })
+          });
+        } catch {}
+      }
+    }
+    fetchNotifications();
+  };
+
   const handleUnlinkTelegram = async () => {
     if (!user) return;
     try {
+      const token = localStorage.getItem("authToken") || "";
       const res = await fetch("/api/user/unlink-telegram", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ userId: user.id })
       });
       if (res.ok) {
         fetchUser(user.id);
-        alert("تم فك الارتباط بنجاح. لقد تم تسجيل خروجك من بوت تليجرام أيضاً.");
+        showToast("تم فك الارتباط بنجاح.", 'success');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.error || "فشل فك الارتباط، حاول مجدداً", 'error');
       }
     } catch (e) {
       console.error(e);
+      showToast("فشل الاتصال بالخادم", 'error');
     }
   };
 
@@ -689,11 +1268,11 @@ export default function App() {
           timeLeft: 600 // 10 minutes
         });
       } else {
-        alert(data.error || "فشل توليد الكود");
+        showToast(data.error || "فشل توليد الكود", 'error');
       }
     } catch (e) {
       console.error(e);
-      alert("خطأ في الاتصال بالسيرفر");
+      showToast("خطأ في الاتصال بالسيرفر", 'error');
     }
   };
 
@@ -710,12 +1289,12 @@ export default function App() {
         setThemeModal({ ...themeModal, isOpen: false });
       }
     } catch (e) {
-      alert("فشل تحديث الثيم");
+      showToast("فشل تحديث الثيم", 'error');
     }
   };
 
   const handleChangeAdminPassword = async () => {
-    if (!newAdminPass) return alert("يرجى إدخال كلمة المرور الجديدة");
+    if (!newAdminPass) return showToast("يرجى إدخال كلمة المرور الجديدة", 'error');
     try {
       const res = await adminFetch("/api/admin/change-password", {
         method: "POST",
@@ -723,18 +1302,18 @@ export default function App() {
         body: JSON.stringify({ newPassword: newAdminPass })
       });
       if (res.ok) {
-        alert("تم تغيير كلمة المرور بنجاح");
+        showToast("تم تغيير كلمة المرور بنجاح", 'success');
         setNewAdminPass("");
       }
     } catch (e) {
-      alert("فشل تغيير كلمة المرور");
+      showToast("فشل تغيير كلمة المرور", 'error');
     }
   };
 
   // Helper: يجيب الـ auth token من localStorage
   const getAuthToken = (): string => localStorage.getItem("authToken") || "";
 
-  const fetchUser = async (id: number) => {
+  const fetchUser = useCallback(async (id: number) => {
     if (!id || isNaN(id)) return;
     try {
       const token = getAuthToken();
@@ -781,15 +1360,15 @@ export default function App() {
       }
       console.error("Fetch user error:", e);
     }
-  };
+  }, []);
 
   const handleRedeemVoucher = async () => {
     if (!user || !voucherCode) return;
     try {
-      const res = await fetch("/api/user/redeem-voucher", {
+      const res = await fetch("/api/vouchers/redeem", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, code: voucherCode })
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("authToken") || ""}` },
+        body: JSON.stringify({ code: voucherCode })
       });
       
       const contentType = res.headers.get("content-type");
@@ -799,17 +1378,17 @@ export default function App() {
 
       const data = await res.json();
       if (res.ok) {
-        alert(`✅ تم شحن ${data.amount}$ بنجاح!`);
+        showToast(`✅ تم شحن ${data.amount}$ بنجاح!`, 'success');
         setVoucherCode("");
         fetchUser(user.id);
       } else {
-        alert(`❌ ${data.error}`);
+        showToast(`❌ ${data.error}`, 'error');
       }
     } catch (e: any) {
       if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
-        alert("❌ فشل الاتصال بالخادم (تأكد من اتصالك بالإنترنت)");
+        showToast("❌ فشل الاتصال بالخادم (تأكد من اتصالك بالإنترنت)", 'error');
       } else {
-        alert("❌ فشل الاتصال بالخادم");
+        showToast("❌ فشل الاتصال بالخادم", 'error');
       }
     }
   };
@@ -820,8 +1399,6 @@ export default function App() {
       if (!res.ok) return;
       const data = await res.json();
       setSiteSettings(Array.isArray(data) ? data : []);
-      const ticker = (Array.isArray(data) ? data : []).find((s: any) => s.key === "ticker_text");
-      if (ticker) setTickerText(ticker.value || "");
     } catch (e) { console.error("Fetch settings error:", e); }
   };
 
@@ -963,7 +1540,7 @@ export default function App() {
     }
   };
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = useCallback(async () => {
     if (!user) return;
     try {
       const token = localStorage.getItem("authToken") || "";
@@ -981,7 +1558,7 @@ export default function App() {
       if (e.name === 'TypeError' && e.message === 'Failed to fetch') return;
       console.error("Fetch transactions error:", e);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     if (activeTab === "orders" && orders.length === 0) fetchOrders();
@@ -1065,21 +1642,15 @@ export default function App() {
 
   const Header = () => (
     <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 z-40">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <button onClick={() => setIsDrawerOpen(true)} className="p-2 hover:bg-gray-50 rounded-full">
           <Menu size={24} className="text-gray-700" />
         </button>
-        {user?.is_vip && (
-          <div className="flex items-center gap-1 bg-gradient-to-r from-amber-400 to-yellow-500 text-black px-2.5 py-1 rounded-full shadow-md" style={{ boxShadow: "0 0 8px rgba(255,200,0,0.5)" }}>
-            <Crown size={12} className="text-black" />
-            <span className="text-[10px] font-black tracking-wide">VIP</span>
-          </div>
-        )}
       </div>
 
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2">
         <div className="w-10 h-10 flex items-center justify-center overflow-hidden">
-          <img 
+          <img loading="lazy" 
             src="https://i.ibb.co/rGbGFvs7/image.png" 
             alt="Logo" 
             className="w-full h-full object-contain"
@@ -1097,12 +1668,18 @@ export default function App() {
             <span className="font-bold">{user.balance.toFixed(2)} $</span>
           </div>
         )}
-        <button onClick={() => setNotificationsOpen(true)} className="p-2 hover:bg-gray-50 rounded-full relative">
-          <Bell size={22} className="text-gray-600" />
-          {(Array.isArray(notifications) ? notifications : []).some(n => !n.is_read) && (
-            <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+        <div className="relative inline-flex">
+          <button onClick={() => setNotificationsOpen(true)} className="p-2 hover:bg-gray-50 rounded-full">
+            <Bell size={22} className="text-gray-600" />
+          </button>
+          {(Array.isArray(notifications) ? notifications : []).filter(n => !n.is_read).length > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full border-2 border-white flex items-center justify-center pointer-events-none z-10">
+              <span className="text-white text-[9px] font-bold leading-none px-0.5">
+                {(Array.isArray(notifications) ? notifications : []).filter(n => !n.is_read).length > 9 ? "9+" : (Array.isArray(notifications) ? notifications : []).filter(n => !n.is_read).length}
+              </span>
+            </span>
           )}
-        </button>
+        </div>
       </div>
     </header>
   );
@@ -1126,9 +1703,19 @@ export default function App() {
           >
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <h3 className="font-bold text-lg text-gray-800">الإشعارات</h3>
-              <button onClick={() => setNotificationsOpen(false)} className="p-2 bg-gray-100 rounded-full">
-                <XCircle size={20} className="text-gray-400" />
-              </button>
+              <div className="flex items-center gap-2">
+                {(Array.isArray(notifications) ? notifications : []).some(n => !n.is_read) && (
+                  <button
+                    onClick={markAllNotificationsRead}
+                    className="text-xs font-bold text-brand bg-brand-light px-3 py-1.5 rounded-full"
+                  >
+                    تمييز الكل كمقروء
+                  </button>
+                )}
+                <button onClick={() => setNotificationsOpen(false)} className="p-2 bg-gray-100 rounded-full">
+                  <XCircle size={20} className="text-gray-400" />
+                </button>
+              </div>
             </div>
             
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -1136,8 +1723,7 @@ export default function App() {
                 (Array.isArray(notifications) ? notifications : []).map(notif => (
                   <div 
                     key={notif.id} 
-                    onClick={() => markNotificationRead(notif.id)}
-                    className={`p-4 rounded-2xl border transition-all ${notif.is_read ? 'opacity-60' : 'shadow-sm'} ${
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer ${notif.is_read ? 'opacity-60' : 'shadow-sm'} ${
                       notif.type === 'warning' ? 'bg-amber-50 border-amber-100' : 
                       notif.type === 'success' ? 'bg-brand-light border-brand-soft' : 'bg-blue-50 border-blue-100'
                     }`}
@@ -1147,7 +1733,20 @@ export default function App() {
                         notif.type === 'warning' ? 'text-amber-800' : 
                         notif.type === 'success' ? 'text-brand' : 'text-blue-800'
                       }`}>{notif.title}</h4>
-                      {notif.created_at && <span className="text-[9px] text-gray-400">{new Date(notif.created_at).toLocaleTimeString("ar-EG")}</span>}
+                      <div className="flex items-center gap-1.5 flex-shrink-0 mr-2">
+                        {notif.created_at && <span className="text-[9px] text-gray-400">{new Date(notif.created_at).toLocaleTimeString("ar-EG")}</span>}
+                        {!notif.is_read && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); markNotificationRead(notif.id); }}
+                            className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                              notif.type === 'warning' ? 'bg-amber-200 text-amber-800' :
+                              notif.type === 'success' ? 'bg-brand text-white' : 'bg-blue-200 text-blue-800'
+                            }`}
+                          >
+                            ✓ مقروء
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <p className={`text-sm leading-relaxed ${
                       notif.type === 'warning' ? 'text-amber-700' : 
@@ -1198,7 +1797,7 @@ export default function App() {
     return (
     <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-gray-100 flex items-center justify-around z-40">
       <button 
-        onClick={() => { setCheckoutOrderResult(null); setActiveTab("home"); setView({ type: "main" }); }}
+        onClick={() => { setCheckoutOrderResult(null); setActiveTab("home"); setView({ type: "main" }); setViewHistory([]); }}
         className={`flex flex-col items-center gap-1 ${activeTab === "home" ? theme.text : "text-gray-400"}`}
       >
         <Home size={22} />
@@ -1218,7 +1817,7 @@ export default function App() {
         <div className="relative">
           <ShoppingBag size={22} />
           {pendingOrders > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
+            <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full w-[18px] h-[18px] flex items-center justify-center leading-none border-2 border-white z-10">
               {pendingOrders > 9 ? "9+" : pendingOrders}
             </span>
           )}
@@ -1232,7 +1831,7 @@ export default function App() {
         <div className="relative">
           <User size={22} />
           {unreadMsgs > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
+            <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full w-[18px] h-[18px] flex items-center justify-center leading-none border-2 border-white z-10">
               {unreadMsgs > 9 ? "9+" : unreadMsgs}
             </span>
           )}
@@ -1244,153 +1843,159 @@ export default function App() {
   };
 
   const Drawer = () => {
-    const waNumber = siteSettings?.find((s: any) => s.key === "support_whatsapp")?.value || "";
-    const telegramBotUsername = siteSettings?.find((s: any) => s.key === "telegram_bot_username")?.value || "";
+    const whatsappLink = siteSettings?.find((s: any) => s.key === "support_whatsapp")?.value || "https://chat.whatsapp.com/DELXtdEh9ua5edFTupESNU";
+
     return (
     <AnimatePresence>
       {isDrawerOpen && (
         <>
-          <motion.div
+          <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsDrawerOpen(false)}
             className="fixed inset-0 bg-black/40 z-50"
           />
-          <motion.div
+          <motion.div 
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
-            transition={{ type: "spring", damping: 28, stiffness: 280 }}
-            className="fixed top-0 right-0 bottom-0 w-72 bg-white z-50 shadow-2xl flex flex-col"
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className={`fixed top-0 right-0 bottom-0 w-72 z-50 shadow-2xl flex flex-col ${isDarkMode ? "bg-zinc-900 text-white" : "bg-white text-gray-800"}`}
           >
-            {/* Header: صورة + بيانات المستخدم */}
-            <div className={`p-5 ${theme.primary} text-white`}>
-              <div className="flex items-center gap-3">
-                <div className="w-16 h-16 rounded-2xl bg-white/20 flex-shrink-0 overflow-hidden border-2 border-white/30">
-                  {user?.avatar_url
-                    ? <img src={user.avatar_url} alt="avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    : <div className="w-full h-full flex items-center justify-center"><User size={30} className="text-white" /></div>}
-                </div>
-                <div className="min-w-0">
-                  <p className="font-bold text-base leading-tight truncate">{user ? user.name : "زائر"}</p>
-                  {user?.email && <p className="text-white/80 text-xs truncate mt-0.5">{user.email}</p>}
-                  {user?.balance !== undefined && (
-                    <p className="text-white/90 text-xs font-bold mt-0.5">{user.balance.toFixed(2)} $</p>
-                  )}
-                  {user?.id && (
-                    <p className="text-white/70 text-[10px] mt-0.5">#{user.id}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* قائمة الروابط */}
-            <div className="flex-1 py-2 overflow-y-auto">
-              {/* الصفحة الرئيسية */}
-              <DrawerItem icon={<Home size={20} />} label="الصفحة الرئيسية"
-                onClick={() => { setActiveTab("home"); setView({ type: "main" }); setIsDrawerOpen(false); }} />
-
-              {/* ملفي الشخصي */}
-              <DrawerItem icon={<User size={20} />} label="ملفي الشخصي"
-                onClick={() => { setActiveTab("profile"); setView({ type: "main" }); setIsDrawerOpen(false); }} />
-
-              {/* طلباتي */}
-              <DrawerItem icon={<ShoppingBag size={20} />} label="طلباتي"
-                onClick={() => { setActiveTab("orders"); setIsDrawerOpen(false); }} />
-
-              {/* شحن الرصيد */}
-              <DrawerItem icon={<Wallet size={20} />} label="شحن الرصيد"
-                onClick={() => { setActiveTab("wallet"); setIsDrawerOpen(false); }}
-                className="text-brand font-bold" />
-
-              {/* دفعاتي */}
-              <DrawerItem icon={<History size={20} />} label="دفعاتي"
-                onClick={() => { setActiveTab("profile"); setView({ type: "payments" }); setIsDrawerOpen(false); }} />
-
-              <div className="border-t border-gray-100 my-1" />
-
-              {/* ربط بوت تلجرام */}
-              <DrawerItem
-                icon={<MessageSquare size={20} />}
-                label={user?.telegram_chat_id ? "تليجرام مرتبط ✓" : "ربط بالبوت تلجرام"}
-                onClick={() => {
-                  if (user?.telegram_chat_id) {
-                    handleUnlinkTelegram();
-                  } else {
-                    handleGenerateLinkingCode();
-                  }
-                  setIsDrawerOpen(false);
-                }}
-                className={user?.telegram_chat_id ? "text-blue-600" : ""}
-              />
-
-              {/* الإشعارات */}
-              <DrawerItem
-                icon={<Bell size={20} />}
-                label="الإشعارات"
-                onClick={() => { setNotificationsOpen(true); setIsDrawerOpen(false); }}
-              />
-
-              {/* الدعم الفني */}
-              <DrawerItem icon={<MessageSquare size={20} />} label="الدعم الفني"
-                onClick={() => { setView({ type: "chat" }); setIsDrawerOpen(false); }} />
-
-              {/* دعم واتساب */}
-              {waNumber && (
-                <DrawerItem
-                  icon={<Phone size={20} />}
-                  label="دعم واتساب"
-                  onClick={() => {
-                    window.open(`https://wa.me/${waNumber.replace(/\D/g, "")}`, "_blank");
-                    setIsDrawerOpen(false);
-                  }}
-                  className="text-green-600"
-                />
-              )}
-
-              <div className="border-t border-gray-100 my-1" />
-
-              {/* سياسة الخصوصية */}
-              <DrawerItem icon={<ShieldCheck size={20} />} label="سياسة الخصوصية"
-                onClick={() => { setView({ type: "privacy_policy" }); setIsDrawerOpen(false); }} />
-
-              {!user && (
-                <DrawerItem icon={<ArrowRight size={20} />} label="تسجيل الدخول"
-                  onClick={() => { setView({ type: "login" }); setIsDrawerOpen(false); }} />
-              )}
-            </div>
-
-            {/* Footer: تبديل الوضع + تسجيل الخروج */}
-            <div className="border-t border-gray-100">
-              {/* زر تبديل الوضع الليلي/النهاري */}
-              <div className="flex items-center justify-between px-6 py-3">
+            {/* ===== رأس القائمة — معلومات الحساب ===== */}
+            <div className={`${theme.primary} p-5 pt-10`}>
+              {user ? (
                 <div className="flex items-center gap-3">
-                  <span className="text-gray-500">{isDarkMode ? <Moon size={20} /> : <Sun size={20} />}</span>
+                  {/* صورة الحساب */}
+                  <div className="w-16 h-16 rounded-2xl overflow-hidden bg-white/20 flex items-center justify-center flex-shrink-0 border-2 border-white/30">
+                    {user.avatar_url
+                      ? <img loading="lazy" src={user.avatar_url} alt="avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      : <User size={28} className="text-white" />
+                    }
+                  </div>
+                  {/* بيانات الحساب */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-white text-sm truncate">{user.name}</p>
+                    <p className="text-white/75 text-[11px] truncate">{user.email}</p>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span className="bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">#{user.id}</span>
+                      <span className="bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Wallet size={9} /> {user.balance?.toFixed(2) ?? "0.00"} $
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center">
+                    <User size={26} className="text-white" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-white text-sm">زائر</p>
+                    <p className="text-white/70 text-xs">سجل الدخول للمزيد</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ===== قائمة العناصر ===== */}
+            <div className="flex-1 overflow-y-auto py-2">
+
+              {user && (
+                <>
+                  <DrawerItem icon={<History size={18} />}    label="دفعاتي"      onClick={() => { setActiveTab("profile"); setView({ type: "payments" }); setIsDrawerOpen(false); }} />
+                  <DrawerItem icon={<ShoppingBag size={18} />} label="طلباتي"     onClick={() => { setActiveTab("orders"); setView({ type: "main" }); setIsDrawerOpen(false); }} />
+                  <DrawerItem icon={<Wallet size={18} />}     label="شحن الرصيد"  onClick={() => { setActiveTab("wallet"); setView({ type: "main" }); setIsDrawerOpen(false); }} />
+                  <DrawerItem icon={<Star size={18} />}       label="المفضلة"     onClick={() => { setActiveTab("home"); setView({ type: "main" }); setHomeSortMode("favorites"); setIsDrawerOpen(false); }} />
+
+                  <div className={`my-2 mx-4 border-t ${isDarkMode ? "border-zinc-700" : "border-gray-100"}`} />
+
+                  <DrawerItem icon={<Trophy size={18} />}     label="الترتيب"     onClick={() => { setActiveTab("profile"); setView({ type: "leaderboard" }); setIsDrawerOpen(false); }} />
+                  <DrawerItem icon={<Gift size={18} />}       label="الإحالة"     onClick={() => { setActiveTab("profile"); setView({ type: "referral" }); setIsDrawerOpen(false); }} />
+
+                  <div className={`my-2 mx-4 border-t ${isDarkMode ? "border-zinc-700" : "border-gray-100"}`} />
+
+                  <DrawerItem icon={<Headphones size={18} />} label="الدعم الفني"  onClick={() => { setActiveTab("profile"); setView({ type: "chat" }); setIsDrawerOpen(false); }} />
+
+                  {/* واتساب */}
+                  <button
+                    onClick={() => { window.open(whatsappLink, "_blank"); setIsDrawerOpen(false); }}
+                    className={`w-full flex items-center gap-4 px-5 py-3.5 transition-colors ${isDarkMode ? "hover:bg-zinc-800" : "hover:bg-gray-50"}`}
+                  >
+                    <span className="text-green-500">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                    </span>
+                    <span className="font-medium text-sm">دعم واتساب</span>
+                  </button>
+
+                  <DrawerItem icon={<Shield size={18} />}     label="سياسة الخصوصية" onClick={() => { setActiveTab("profile"); setView({ type: "privacy_policy" }); setIsDrawerOpen(false); }} />
+
+                  {/* ربط تلجرام */}
+                  <button
+                    onClick={() => {
+                      if (user?.telegram_chat_id) {
+                        handleUnlinkTelegram();
+                      } else {
+                        handleGenerateLinkingCode();
+                      }
+                      setIsDrawerOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-4 px-5 py-3.5 transition-colors ${isDarkMode ? "hover:bg-zinc-800" : "hover:bg-gray-50"}`}
+                  >
+                    <span className={user?.telegram_chat_id ? "text-blue-500" : "text-orange-400"}>
+                      <MessageSquare size={18} />
+                    </span>
+                    <span className="font-medium text-sm flex-1 text-right">
+                      {user?.telegram_chat_id ? "تلجرام مرتبط ✓" : "ربط تلجرام"}
+                    </span>
+                    {user?.telegram_chat_id && (
+                      <span className="text-[10px] text-red-400 font-bold">فك الربط</span>
+                    )}
+                  </button>
+
+                  <div className={`my-2 mx-4 border-t ${isDarkMode ? "border-zinc-700" : "border-gray-100"}`} />
+                </>
+              )}
+
+              {/* الوضع الليلي / النهاري */}
+              <div className={`flex items-center justify-between px-5 py-3.5 ${isDarkMode ? "hover:bg-zinc-800" : "hover:bg-gray-50"} transition-colors`}>
+                <div className="flex items-center gap-4">
+                  <span className={isDarkMode ? "text-yellow-400" : "text-gray-500"}>
+                    {isDarkMode ? <Moon size={18} /> : <Sun size={18} />}
+                  </span>
                   <span className="font-medium text-sm">{isDarkMode ? "الوضع الليلي" : "الوضع النهاري"}</span>
                 </div>
                 <button
                   onClick={() => setIsDarkMode(!isDarkMode)}
-                  className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${isDarkMode ? "bg-brand" : "bg-gray-200"}`}
+                  className={`w-12 h-6 rounded-full relative transition-all duration-300 ${isDarkMode ? "bg-brand" : "bg-gray-200"}`}
                 >
-                  <motion.div
-                    layout
-                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                    className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow ${isDarkMode ? "right-1" : "left-1"}`}
-                  />
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all duration-300 flex items-center justify-center ${isDarkMode ? "right-1" : "left-1"}`}>
+                    {isDarkMode ? <Moon size={9} className="text-brand" /> : <Sun size={9} className="text-yellow-500" />}
+                  </div>
                 </button>
               </div>
 
-              {user && (
-                <button
-                  onClick={() => { handleLogout(); setIsDrawerOpen(false); }}
-                  className="w-full flex items-center gap-4 px-6 py-3 text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
-                >
-                  <LogOut size={20} />
-                  <span className="font-medium">تسجيل الخروج</span>
-                </button>
+              {deferredPrompt && (
+                <DrawerItem
+                  icon={<Download size={18} />}
+                  label="تثبيت التطبيق"
+                  onClick={() => { handleInstallApp(); setIsDrawerOpen(false); }}
+                  className="text-brand"
+                />
               )}
-              <div className="py-3 text-center text-xs text-gray-400">الإصدار 1.0.0</div>
+
+              <div className={`my-2 mx-4 border-t ${isDarkMode ? "border-zinc-700" : "border-gray-100"}`} />
+
+              {user ? (
+                <DrawerItem icon={<LogOut size={18} />} label="تسجيل الخروج" onClick={handleLogout} className="text-red-500" />
+              ) : (
+                <DrawerItem icon={<ArrowRight size={18} />} label="تسجيل الدخول" onClick={() => { setView({ type: "login" }); setIsDrawerOpen(false); }} />
+              )}
+            </div>
+
+            <div className={`p-3 text-center text-[10px] border-t ${isDarkMode ? "text-zinc-500 border-zinc-700" : "text-gray-300 border-gray-100"}`}>
+              العزيز store · الإصدار 1.3
             </div>
           </motion.div>
         </>
@@ -1400,81 +2005,11 @@ export default function App() {
   };
 
   const DrawerItem = ({ icon, label, onClick, className = "" }: any) => (
-    <button onClick={onClick} className={`w-full flex items-center gap-4 px-6 py-4 hover:bg-gray-50 transition-colors ${className}`}>
-      <span className="text-gray-500">{icon}</span>
-      <span className="font-medium">{label}</span>
+    <button onClick={onClick} className={`w-full flex items-center gap-4 px-5 py-3.5 transition-colors text-sm font-medium ${isDarkMode ? "hover:bg-zinc-800" : "hover:bg-gray-50"} ${className}`}>
+      <span className={className ? "" : isDarkMode ? "text-zinc-400" : "text-gray-500"}>{icon}</span>
+      <span>{label}</span>
     </button>
   );
-
-  // --- SearchBar Component ---
-  const SearchBar = () => {
-    const [query, setQuery] = useState("");
-    const [results, setResults] = useState<any[]>([]);
-
-    useEffect(() => {
-      const q = query.trim().toLowerCase();
-      if (!q) { setResults([]); return; }
-      const found: any[] = [];
-      categories.forEach(c => {
-        if (c.name?.toLowerCase().includes(q)) found.push({ type: "قسم رئيسي", name: c.name, image: c.image_url, action: () => { setView({ type: "subcategories", id: c.id, data: c.name }); setQuery(""); } });
-      });
-      subcategories.forEach(s => {
-        if (s.name?.toLowerCase().includes(q)) found.push({ type: "قسم فرعي", name: s.name, image: s.image_url, action: () => { setView({ type: "sub_sub_categories", id: s.id, data: s.name, catId: s.category_id }); setQuery(""); } });
-      });
-      subSubCategories.forEach(ss => {
-        if (ss.name?.toLowerCase().includes(q)) found.push({ type: "فرع فرعي", name: ss.name, image: ss.image_url, action: () => { setView({ type: "products", id: ss.id, data: ss.name, fromSubSub: true }); setQuery(""); } });
-      });
-      products.forEach(p => {
-        if (p.name?.toLowerCase().includes(q)) found.push({ type: "منتج", name: p.name, image: p.image_url, price: p.price, action: () => { setQuery(""); } });
-      });
-      setResults(found.slice(0, 20));
-    }, [query]);
-
-    return (
-      <div className="px-4 relative">
-        <div className="flex items-center gap-2 bg-gray-100 rounded-2xl px-4 py-3">
-          <Search size={18} className="text-gray-400 flex-shrink-0" />
-          <input
-            type="text"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="ابحث عن قسم أو منتج..."
-            className="flex-1 bg-transparent outline-none text-sm text-gray-700 placeholder-gray-400"
-            dir="rtl"
-          />
-          {query && (
-            <button onClick={() => setQuery("")} className="text-gray-400">
-              <X size={16} />
-            </button>
-          )}
-        </div>
-        {results.length > 0 && (
-          <div className="absolute top-full left-4 right-4 mt-1 bg-white rounded-2xl shadow-xl border border-gray-100 z-30 max-h-72 overflow-y-auto">
-            {results.map((r, i) => (
-              <button key={i} onClick={r.action} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 text-right">
-                {r.image ? (
-                  <img src={r.image} className="w-9 h-9 rounded-xl object-cover flex-shrink-0" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
-                    <Search size={14} className="text-gray-400" />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0 text-right">
-                  <p className="text-sm font-bold text-gray-800 truncate">{r.name}</p>
-                  <p className="text-[10px] text-gray-400">{r.type}{r.price !== undefined ? ` · ${Number(r.price).toFixed(2)} $` : ""}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-        {query.trim() && results.length === 0 && (
-          <div className="absolute top-full left-4 right-4 mt-1 bg-white rounded-2xl shadow-xl border border-gray-100 z-30 py-4 text-center text-sm text-gray-400">
-            لا توجد نتائج لـ "{query}"
-          </div>
-        )}
-      </div>
-    );
-  };
 
   // --- Views ---
 
@@ -1491,10 +2026,10 @@ export default function App() {
     }, [banners]);
 
     return (
-      <div className="space-y-4 pb-20">
-        {/* Hero Carousel - نسبة 3:1 */}
+      <div className="space-y-6 pb-20">
+        {/* Hero Carousel */}
         <div className="px-4">
-          <div className={`bg-gray-100 rounded-2xl overflow-hidden relative shadow-lg ${theme.shadow}`} style={{ aspectRatio: "3/1" }}>
+          <div className={`aspect-[3/1] bg-gray-100 rounded-2xl overflow-hidden relative shadow-lg ${theme.shadow}`}>
             {banners.length > 0 ? (
               <AnimatePresence mode="wait">
                 <motion.img
@@ -1514,61 +2049,292 @@ export default function App() {
                 <button className="mt-4 bg-white text-brand px-4 py-1.5 rounded-full text-sm font-bold w-fit">اكتشف الآن</button>
               </div>
             )}
+            
             {banners.length > 1 && (
-              <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
+              <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
                 {banners.map((_, idx) => (
-                  <div key={idx} className={`h-1.5 rounded-full transition-all ${idx === currentBanner ? "w-4 bg-white" : "w-1.5 bg-white/40"}`} />
+                  <div 
+                    key={idx} 
+                    className={`h-1.5 rounded-full transition-all ${idx === currentBanner ? "w-4 bg-white" : "w-1.5 bg-white/40"}`}
+                  />
                 ))}
               </div>
             )}
           </div>
         </div>
 
-        {/* Ticker / Scrolling Text */}
-        {tickerText && tickerText.trim() && (
-          <div className={`mx-4 rounded-xl overflow-hidden ${theme.primary} shadow-sm`}>
-            <div className="ticker-wrap">
-              <div className="ticker-track">{tickerText}</div>
-            </div>
+      {/* Categories / Most Purchased / Favorites */}
+      <div className="px-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-gray-800">
+            {homeSortMode === "categories" ? "الأقسام الرئيسية" : homeSortMode === "most_purchased" ? "أكثر المنتجات شراءً" : "مفضلاتي"}
+          </h3>
+          {/* Custom Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowSortDropdown(v => !v)}
+              className={`flex items-center gap-1.5 text-sm font-bold px-3 py-1.5 rounded-full border ${theme.border} ${theme.text} bg-white shadow-sm`}
+            >
+              {homeSortMode === "categories" ? "الأقسام" : homeSortMode === "most_purchased" ? "الأكثر شراءً" : "المفضلة"}
+              <ChevronDown size={14} className={`transition-transform ${showSortDropdown ? "rotate-180" : ""}`} />
+            </button>
+            <AnimatePresence>
+              {showSortDropdown && (
+                <>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => setShowSortDropdown(false)}
+                    className="fixed inset-0 z-40"
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.92, y: -6 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.92, y: -6 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    className="absolute left-0 top-full mt-2 z-50 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden min-w-[160px]"
+                  >
+                    {[
+                      { value: "categories", label: "الأقسام الرئيسية", icon: "🗂" },
+                      { value: "most_purchased", label: "الأكثر شراءً", icon: "🔥" },
+                      { value: "favorites", label: "مفضلاتي", icon: "⭐" },
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => {
+                          const v = opt.value as any;
+                          setHomeSortMode(v);
+                          if (v === "most_purchased") fetchMostPurchased();
+                          setShowSortDropdown(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-right transition-colors ${
+                          homeSortMode === opt.value
+                            ? `${theme.bgLight} ${theme.text}`
+                            : "text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        <span className="text-base">{opt.icon}</span>
+                        <span className="flex-1 text-right">{opt.label}</span>
+                        {homeSortMode === opt.value && <span className={`w-2 h-2 rounded-full ${theme.button}`} />}
+                      </button>
+                    ))}
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* ===== CATEGORIES VIEW ===== */}
+        {homeSortMode === "categories" && (
+          <div className="grid grid-cols-3 gap-3">
+            {categories.length === 0 ? (
+              [1,2,3,4,5,6].map(i => (
+                <div key={i} className="bg-gray-100 rounded-xl overflow-hidden animate-pulse">
+                  <div className="w-full aspect-square bg-gray-200" />
+                  <div className="h-4 bg-gray-200 mx-2 my-2 rounded-full" />
+                </div>
+              ))
+            ) : categories.map(cat => {
+              const favKey = `cat_${cat.id}`;
+              let longPressTimer: any = null;
+              return (
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  key={cat.id}
+                  onClick={async () => {
+                    setPageLoading(true);
+                    await fetchSubcategories(cat.id);
+                    navigateTo({ type: "subcategories", id: cat.id, data: cat.name });
+                    setPageLoading(false);
+                  }}
+                  onContextMenu={e => e.preventDefault()}
+                  onTouchStart={e => {
+                    const touch = e.touches[0];
+                    longPressTimer = setTimeout(() => {
+                      useLongPressHandlers({ ...cat, _fav_key: favKey, _fav_type: "category", _fav_label: cat.name, _fav_image: cat.image_url }, e);
+                    }, 600);
+                  }}
+                  onTouchEnd={() => clearTimeout(longPressTimer)}
+                  onTouchMove={() => clearTimeout(longPressTimer)}
+                  onMouseDown={e => {
+                    longPressTimer = setTimeout(() => {
+                      useLongPressHandlers({ ...cat, _fav_key: favKey, _fav_type: "category", _fav_label: cat.name, _fav_image: cat.image_url }, e);
+                    }, 600);
+                  }}
+                  onMouseUp={() => clearTimeout(longPressTimer)}
+                  onMouseLeave={() => clearTimeout(longPressTimer)}
+                  className={`bg-white rounded-xl border ${isFavorite(favKey) ? "border-yellow-400" : "border-gray-100"} shadow-sm flex flex-col items-center overflow-hidden hover:${theme.border} transition-colors relative`}
+                >
+                  {isFavorite(favKey) && <span className="absolute top-1 right-1 text-yellow-400 text-xs">⭐</span>}
+                  <div className="w-full aspect-square overflow-hidden bg-gray-50">
+                    <img
+                      src={cat.image_url}
+                      alt={cat.name}
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                      draggable={false}
+                      onDragStart={e => e.preventDefault()}
+                    />
+                  </div>
+                  <span className="font-bold text-gray-700 text-[10px] text-center w-full px-1 py-1.5 leading-tight">{cat.name}</span>
+                </motion.button>
+              );
+            })}
           </div>
         )}
 
-        {/* Search Bar */}
-        <SearchBar />
+        {/* ===== MOST PURCHASED VIEW ===== */}
+        {homeSortMode === "most_purchased" && (
+          <div className="grid grid-cols-3 gap-3">
+            {mostPurchasedLoading ? (
+              [1,2,3,4,5,6,7,8,9].map(i => (
+                <div key={i} className="bg-gray-100 rounded-xl overflow-hidden animate-pulse">
+                  <div className="w-full aspect-square bg-gray-200" />
+                  <div className="h-4 bg-gray-200 mx-2 my-2 rounded-full" />
+                </div>
+              ))
+            ) : mostPurchased.length === 0 ? (
+              <div className="col-span-3 text-center text-gray-400 py-10 text-sm">لا توجد بيانات بعد</div>
+            ) : mostPurchased.slice(0, 9).map((prod: any) => (
+              <motion.div
+                whileTap={{ scale: 0.95 }}
+                key={prod.id}
+                onClick={() => {
+                  if (!user) return navigateTo({ type: "login" });
+                  if (prod.store_type === 'quick_order') {
+                    navigateTo({ type: "quick_order", data: prod, fromMostPurchased: true });
+                  } else {
+                    setCheckoutQuantity(parseInt(String(prod.min_quantity)) || 0);
+                    navigateTo({ type: "checkout", data: prod, fromMostPurchased: true });
+                  }
+                }}
+                className="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col items-center overflow-hidden cursor-pointer"
+              >
+                <div className="w-full aspect-square overflow-hidden bg-gray-50">
+                  <img
+                    src={prod.image_url || ""}
+                    alt={prod.name}
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                    draggable={false}
+                    onDragStart={e => e.preventDefault()}
+                    onContextMenu={e => e.preventDefault()}
+                  />
+                </div>
+                <div className="w-full px-1 py-1.5">
+                  <p className="font-bold text-gray-700 text-[10px] text-center leading-tight truncate">{prod.name}</p>
+                  <p className={`${theme.text} text-[10px] text-center font-bold`}>{parseFloat(prod.price || 0).toFixed(2)}$</p>
+                  <p className="text-gray-400 text-[9px] text-center">🛒 تم شراؤه {prod.purchase_count} {prod.purchase_count === 1 ? "مرة" : "مرات"}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
 
-      {/* Categories */}
-      <div className="px-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-gray-800">الأقسام الرئيسية</h3>
-          <button className={`${theme.text} text-sm font-medium`}>عرض الكل</button>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          {categories.length === 0 ? (
-            [1,2,3,4,5,6].map(i => (
-              <div key={i} className="bg-gray-100 rounded-xl overflow-hidden animate-pulse">
-                <div className="w-full aspect-square bg-gray-200" />
-                <div className="h-4 bg-gray-200 mx-2 my-2 rounded-full" />
+        {/* ===== FAVORITES VIEW ===== */}
+        {homeSortMode === "favorites" && (
+          <div>
+            {favorites.length === 0 ? (
+              <div className="text-center py-10 text-gray-400">
+                <Star size={40} className="mx-auto mb-3 text-gray-200" />
+                <p className="text-sm">لا توجد مفضلات بعد</p>
+                <p className="text-xs mt-1">اضغط مطولاً على أي قسم أو منتج لإضافته</p>
               </div>
-            ))
-          ) : categories.map(cat => (
-            <motion.button 
-              whileTap={{ scale: 0.95 }}
-              key={cat.id}
-              onClick={async () => {
-                setPageLoading(true);
-                await fetchSubcategories(cat.id);
-                setView({ type: "subcategories", id: cat.id, data: cat.name });
-                setPageLoading(false);
-              }}
-              className={`bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col items-center overflow-hidden hover:${theme.border} transition-colors`}
-            >
-              <div className="w-full aspect-square overflow-hidden bg-gray-50">
-                <img src={cat.image_url} alt={cat.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            ) : (
+              <div className="grid grid-cols-3 gap-3">
+                {favorites.slice(0, 9).map((fav: any) => (
+                  <div key={fav._fav_key} className="relative">
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={async () => {
+                        // Reset history when coming from favorites - start fresh from main
+                        setViewHistory([{ type: "main" }]);
+                        if (fav._fav_type === "category") {
+                          setPageLoading(true);
+                          await fetchSubcategories(fav.id);
+                          const nextView = { type: "subcategories", id: fav.id, data: fav.name, fromFav: true };
+                          setViewHistory([{ type: "main" }, nextView]);
+                          setView(nextView);
+                          setPageLoading(false);
+                        } else if (fav._fav_type === "subcategory") {
+                          setPageLoading(true);
+                          const subSubs = await fetchSubSubCategories(fav.id);
+                          await fetchProducts(fav.id);
+                          if (subSubs.length > 0) {
+                            const nextView = { type: "sub_sub_categories", id: fav.id, data: fav.name, catId: fav.category_id, fromFav: true };
+                            setViewHistory([{ type: "main" }, nextView]);
+                            setView(nextView);
+                          } else {
+                            const nextView = { type: "products", id: fav.id, data: fav.name, fromSubSub: false, catId: fav.category_id, fromFav: true };
+                            setViewHistory([{ type: "main" }, nextView]);
+                            setView(nextView);
+                          }
+                          setPageLoading(false);
+                        } else if (fav._fav_type === "sub_sub_category") {
+                          setPageLoading(true);
+                          await fetchProducts(fav.id, true);
+                          const nextView = { type: "products", id: fav.id, data: fav.name, fromSubSub: true, catId: fav.category_id, subId: fav.subcategory_id, fromFav: true };
+                          setViewHistory([{ type: "main" }, nextView]);
+                          setView(nextView);
+                          setPageLoading(false);
+                        } else if (fav._fav_type === "product") {
+                          setPageLoading(true);
+                          const subId = fav._view_id;
+                          const isSubSub = fav._view_fromSubSub ?? true;
+                          await fetchProducts(subId, isSubSub);
+                          const prodListView = {
+                            type: "products",
+                            id: subId,
+                            data: fav._view_data,
+                            fromSubSub: isSubSub,
+                            catId: fav._view_catId,
+                            subId: fav._view_subId,
+                            subName: fav._view_subName,
+                            fromFav: true,
+                          };
+                          setViewHistory([{ type: "main" }, prodListView]);
+                          setView(prodListView);
+                          setPageLoading(false);
+                          setTimeout(() => {
+                            if (!user) return setView({ type: "login" });
+                            if (fav.store_type === 'quick_order') {
+                              setView({ type: "quick_order", data: fav });
+                            } else {
+                              setCheckoutQuantity(parseInt(String(fav.min_quantity)) || 0);
+                              setView({ type: "checkout", data: fav });
+                            }
+                          }, 150);
+                        }
+                      }}
+                      className="w-full bg-white rounded-xl border border-yellow-300 shadow-sm flex flex-col items-center overflow-hidden"
+                      onContextMenu={e => e.preventDefault()}
+                    >
+                      <div className="w-full aspect-square overflow-hidden bg-gray-50 relative">
+                        <img
+                          src={fav._fav_image || ""}
+                          alt={fav._fav_label}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                          draggable={false}
+                          onDragStart={e => e.preventDefault()}
+                          onContextMenu={e => e.preventDefault()}
+                        />
+                        <span className="absolute top-1 right-1 text-yellow-400 text-xs">⭐</span>
+                      </div>
+                      <span className="font-bold text-gray-700 text-[10px] text-center w-full px-1 py-1.5 leading-tight truncate">{fav._fav_label}</span>
+                    </motion.button>
+                    <button
+                      onClick={() => removeFromFavorites(fav._fav_key)}
+                      className="absolute -top-1 -left-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] z-10"
+                    >✕</button>
+                  </div>
+                ))}
               </div>
-              <span className="font-bold text-gray-700 text-[10px] text-center w-full px-1 py-1.5 leading-tight">{cat.name}</span>
-            </motion.button>
-          ))}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Dynamic Offers */}
@@ -1580,7 +2346,7 @@ export default function App() {
               <div key={offer.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex items-center gap-4">
                 <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center overflow-hidden">
                   {offer.image_url ? (
-                    <img src={offer.image_url} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <img loading="lazy" src={offer.image_url} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
                     <ImageIcon size={24} className="text-orange-600" />
                   )}
@@ -1602,12 +2368,21 @@ export default function App() {
   const SubcategoriesView = () => (
     <div className="px-4 space-y-4 pb-20">
       <div className="flex items-center gap-2 mb-6">
-        <button onClick={() => setView({ type: "main" })} className="p-2 bg-gray-100 rounded-full">
+        <button onClick={navigateBack} className="p-2 bg-gray-100 rounded-full">
           <ArrowRight size={20} className="text-gray-600" />
         </button>
         <h2 className="text-xl font-bold text-gray-800">{view.data}</h2>
       </div>
-      {subcategories.length === 0 ? (
+      {subcategories.length === 0 && pageLoading ? (
+        <div className="grid grid-cols-3 gap-3">
+          {[1,2,3,4,5,6].map(i => (
+            <div key={i} className="bg-gray-100 rounded-xl overflow-hidden animate-pulse">
+              <div className="w-full aspect-square bg-gray-200" />
+              <div className="h-4 bg-gray-200 mx-2 my-2 rounded-full" />
+            </div>
+          ))}
+        </div>
+      ) : subcategories.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
           <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center text-gray-200">
             <LayoutGrid size={40} />
@@ -1618,33 +2393,50 @@ export default function App() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3">
-          {subcategories.map(sub => (
-            <motion.button 
-              whileTap={{ scale: 0.98 }}
-              key={sub.id}
-              onClick={async () => {
-                setPageLoading(true);
-                const subSubs = await fetchSubSubCategories(sub.id);
-                await fetchProducts(sub.id);
-                if (subSubs.length > 0) {
-                  setView({ type: "sub_sub_categories", id: sub.id, data: sub.name, catId: view.id });
-                } else {
-                  setView({ type: "products", id: sub.id, data: sub.name, fromSubSub: false });
-                }
-                setPageLoading(false);
-              }}
-              className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between hover:border-brand-soft"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center overflow-hidden">
-                  <img src={sub.image_url || "https://picsum.photos/seed/sub/100/100"} alt={sub.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+        <div className="grid grid-cols-3 gap-3">
+          {subcategories.map(sub => {
+            const favKey = `sub_${sub.id}`;
+            let lpTimer: any = null;
+            return (
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                key={sub.id}
+                onClick={async () => {
+                  setPageLoading(true);
+                  const subSubs = await fetchSubSubCategories(sub.id);
+                  await fetchProducts(sub.id);
+                  if (subSubs.length > 0) {
+                    navigateTo({ type: "sub_sub_categories", id: sub.id, data: sub.name, catId: view.id });
+                  } else {
+                    navigateTo({ type: "products", id: sub.id, data: sub.name, fromSubSub: false });
+                  }
+                  setPageLoading(false);
+                }}
+                onContextMenu={e => e.preventDefault()}
+                onTouchStart={e => { lpTimer = setTimeout(() => useLongPressHandlers({ ...sub, _fav_key: favKey, _fav_type: "subcategory", _fav_label: sub.name, _fav_image: sub.image_url, category_id: view.id }, e), 600); }}
+                onTouchEnd={() => clearTimeout(lpTimer)}
+                onTouchMove={() => clearTimeout(lpTimer)}
+                onMouseDown={e => { lpTimer = setTimeout(() => useLongPressHandlers({ ...sub, _fav_key: favKey, _fav_type: "subcategory", _fav_label: sub.name, _fav_image: sub.image_url, category_id: view.id }, e), 600); }}
+                onMouseUp={() => clearTimeout(lpTimer)}
+                onMouseLeave={() => clearTimeout(lpTimer)}
+                className={`bg-white rounded-2xl border ${isFavorite(favKey) ? "border-yellow-400" : "border-gray-100"} shadow-sm flex flex-col items-center overflow-hidden active:scale-95 transition-transform relative`}
+              >
+                {isFavorite(favKey) && <span className="absolute top-1 right-1 text-yellow-400 text-xs z-10">⭐</span>}
+                <div className="w-full aspect-square overflow-hidden bg-gray-50">
+                  <img
+                    src={sub.image_url || "https://picsum.photos/seed/sub/100/100"}
+                    alt={sub.name}
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                    draggable={false}
+                    onDragStart={e => e.preventDefault()}
+                    onContextMenu={e => e.preventDefault()}
+                  />
                 </div>
-                <span className="font-bold text-gray-700">{sub.name}</span>
-              </div>
-              <ChevronRight size={20} className="text-gray-300" />
-            </motion.button>
-          ))}
+                <span className="font-bold text-gray-700 text-[9px] text-center w-full px-1 py-1.5 leading-tight">{sub.name}</span>
+              </motion.button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -1655,7 +2447,7 @@ export default function App() {
     return (
       <div className="px-4 space-y-4 pb-20">
         <div className="flex items-center gap-2 mb-6">
-          <button onClick={() => setView({ type: "subcategories", id: view.catId, data: view.data })} className="p-2 bg-gray-100 rounded-full">
+          <button onClick={navigateBack} className="p-2 bg-gray-100 rounded-full">
             <ArrowRight size={20} className="text-gray-600" />
           </button>
           <h2 className="text-xl font-bold text-gray-800">{view.data}</h2>
@@ -1663,28 +2455,45 @@ export default function App() {
 
         {/* Sub-sub-categories */}
         {subSubCategories.length > 0 && (
-          <div className="grid grid-cols-1 gap-3">
-            {subSubCategories.map(ss => (
-              <motion.button
-                whileTap={{ scale: 0.98 }}
-                key={ss.id}
-                onClick={async () => {
-                  setPageLoading(true);
-                  await fetchProducts(ss.id, true);
-                  setView({ type: "products", id: ss.id, data: ss.name, fromSubSub: true, subId: view.id, subName: view.data, catId: view.catId });
-                  setPageLoading(false);
-                }}
-                className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between hover:border-brand-soft"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center overflow-hidden">
-                    <img src={ss.image_url || "https://picsum.photos/seed/ss/100/100"} alt={ss.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          <div className="grid grid-cols-3 gap-3">
+            {subSubCategories.map(ss => {
+              const favKey = `sss_${ss.id}`;
+              let lpTimer2: any = null;
+              return (
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  key={ss.id}
+                  onClick={async () => {
+                    setPageLoading(true);
+                    await fetchProducts(ss.id, true);
+                    navigateTo({ type: "products", id: ss.id, data: ss.name, fromSubSub: true, subId: view.id, subName: view.data, catId: view.catId, fromFav: view.fromFav });
+                    setPageLoading(false);
+                  }}
+                  onContextMenu={e => e.preventDefault()}
+                  onTouchStart={e => { lpTimer2 = setTimeout(() => useLongPressHandlers({ ...ss, _fav_key: favKey, _fav_type: "sub_sub_category", _fav_label: ss.name, _fav_image: ss.image_url, category_id: view.catId, subcategory_id: view.id }, e), 600); }}
+                  onTouchEnd={() => clearTimeout(lpTimer2)}
+                  onTouchMove={() => clearTimeout(lpTimer2)}
+                  onMouseDown={e => { lpTimer2 = setTimeout(() => useLongPressHandlers({ ...ss, _fav_key: favKey, _fav_type: "sub_sub_category", _fav_label: ss.name, _fav_image: ss.image_url, category_id: view.catId, subcategory_id: view.id }, e), 600); }}
+                  onMouseUp={() => clearTimeout(lpTimer2)}
+                  onMouseLeave={() => clearTimeout(lpTimer2)}
+                  className={`bg-white rounded-2xl border ${isFavorite(favKey) ? "border-yellow-400" : "border-gray-100"} shadow-sm flex flex-col items-center overflow-hidden active:scale-95 transition-transform relative`}
+                >
+                  {isFavorite(favKey) && <span className="absolute top-1 right-1 text-yellow-400 text-xs z-10">⭐</span>}
+                  <div className="w-full aspect-square overflow-hidden bg-gray-50">
+                    <img
+                      src={ss.image_url || "https://picsum.photos/seed/ss/100/100"}
+                      alt={ss.name}
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                      draggable={false}
+                      onDragStart={e => e.preventDefault()}
+                      onContextMenu={e => e.preventDefault()}
+                    />
                   </div>
-                  <span className="font-bold text-gray-700">{ss.name}</span>
-                </div>
-                <ChevronRight size={20} className="text-gray-300" />
-              </motion.button>
-            ))}
+                  <span className="font-bold text-gray-700 text-[9px] text-center w-full px-1 py-1.5 leading-tight">{ss.name}</span>
+                </motion.button>
+              );
+            })}
           </div>
         )}
 
@@ -1699,13 +2508,13 @@ export default function App() {
                 <div key={prod.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-4">
                   <div className="flex items-center gap-4">
                     <div className="w-16 h-16 bg-gray-50 rounded-xl flex items-center justify-center overflow-hidden">
-                      <img src={prod.image_url || "https://picsum.photos/seed/prod/100/100"} alt={prod.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <img loading="lazy" src={prod.image_url || "https://picsum.photos/seed/prod/100/100"} alt={prod.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     </div>
                     <div className="flex-1">
                       <h4 className="font-bold text-gray-800">{prod.name}</h4>
                       <p className={`${theme.text} font-bold`}>
-                        {(prod.store_type === 'quantities' || prod.store_type === 'external_api')
-                          ? `${(parseFloat(prod.price_per_unit as any) || parseFloat(prod.price as any) || 0).toFixed(7)} $ / وحدة`
+                        {prod.store_type === 'quantities'
+                          ? `${(parseFloat(prod.price_per_unit as any) || 0).toFixed(6)} $ / وحدة`
                           : `${(parseFloat(prod.price as any) || 0).toFixed(2)} $`}
                       </p>
                     </div>
@@ -1721,11 +2530,9 @@ export default function App() {
                     onClick={() => {
                       if (!user) return setView({ type: "login" });
                       if (prod.store_type === 'quick_order') {
-                        setQuickOrderPlayerId("");
                         setView({ type: "quick_order", data: prod });
                       } else {
                         setCheckoutQuantity(parseInt(String(prod.min_quantity)) || 0);
-                        setCheckoutPlayerInput("");
                         setView({ type: "checkout", data: prod });
                       }
                     }}
@@ -1757,20 +2564,26 @@ export default function App() {
   const ProductsView = () => (
     <div className="px-4 space-y-4 pb-20">
       <div className="flex items-center gap-2 mb-6">
-        <button
-          onClick={() => {
-            if (view.fromSubSub) {
-              setView({ type: "sub_sub_categories", id: view.subId, data: view.subName, catId: view.catId });
-            } else {
-              setView({ type: "subcategories", data: "الرجوع" });
-            }
-          }}
-          className="p-2 bg-gray-100 rounded-full">
+        <button onClick={navigateBack} className="p-2 bg-gray-100 rounded-full">
           <ArrowRight size={20} className="text-gray-600" />
         </button>
         <h2 className="text-xl font-bold text-gray-800">{view.data}</h2>
       </div>
-      {products.length === 0 ? (
+      {products.length === 0 && pageLoading ? (
+        <div className="grid grid-cols-1 gap-4">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="bg-white rounded-2xl p-4 flex gap-4 animate-pulse shadow-sm">
+              <div className="w-20 h-20 bg-gray-200 rounded-xl flex-shrink-0" />
+              <div className="flex-1 space-y-2 pt-1">
+                <div className="h-4 bg-gray-200 rounded-full w-3/4" />
+                <div className="h-3 bg-gray-100 rounded-full w-1/2" />
+                <div className="h-3 bg-gray-100 rounded-full w-2/3" />
+                <div className="h-8 bg-gray-200 rounded-xl w-1/3 mt-2" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : products.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
           <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center text-gray-200">
             <ShoppingBag size={40} />
@@ -1781,56 +2594,91 @@ export default function App() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 gap-3">
           {products.map(prod => {
             const isUnavailable = prod.available === false;
+            const isApi = prod.store_type === 'external_api';
+            const isQuantity = prod.store_type === 'quantities';
+            const isQuick = prod.store_type === 'quick_order';
+            let lpTimerProd: any = null;
+            const typeLabel = isApi ? 'تلقائي' : isQuick ? 'سريع' : isQuantity ? 'كمية' : 'يدوي';
+            const typeBg = isApi ? 'bg-blue-500' : isQuick ? 'bg-purple-500' : isQuantity ? 'bg-teal-500' : 'bg-gray-500';
             return (
-            <div key={prod.id} className={`bg-white p-4 rounded-2xl border shadow-sm flex flex-col gap-4 transition-all ${isUnavailable ? "border-gray-100 opacity-60 grayscale" : "border-gray-100"}`}>
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-gray-50 rounded-xl flex items-center justify-center overflow-hidden">
-                  <img src={prod.image_url || "https://picsum.photos/seed/prod/100/100"} alt={prod.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            <div
+              key={prod.id}
+              className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all relative ${isUnavailable ? "border-gray-100 opacity-60 grayscale" : isFavorite(`prod_${prod.id}`) ? "border-yellow-400" : "border-gray-100"}`}
+              style={{ aspectRatio: '3/1' }}
+              onContextMenu={e => e.preventDefault()}
+              onTouchStart={e => { lpTimerProd = setTimeout(() => useLongPressHandlers({ ...prod, _fav_key: `prod_${prod.id}`, _fav_type: "product", _fav_label: prod.name, _fav_image: prod.image_url, _view_id: view.id, _view_data: view.data, _view_fromSubSub: view.fromSubSub, _view_catId: view.catId, _view_subId: view.subId, _view_subName: view.subName }, e), 600); }}
+              onTouchEnd={() => clearTimeout(lpTimerProd)}
+              onTouchMove={() => clearTimeout(lpTimerProd)}
+              onMouseDown={e => { lpTimerProd = setTimeout(() => useLongPressHandlers({ ...prod, _fav_key: `prod_${prod.id}`, _fav_type: "product", _fav_label: prod.name, _fav_image: prod.image_url, _view_id: view.id, _view_data: view.data, _view_fromSubSub: view.fromSubSub, _view_catId: view.catId, _view_subId: view.subId, _view_subName: view.subName }, e), 600); }}
+              onMouseUp={() => clearTimeout(lpTimerProd)}
+              onMouseLeave={() => clearTimeout(lpTimerProd)}
+            >
+              <div className="flex h-full" dir="rtl">
+                {/* Right: Product Image 1:1 */}
+                <div className="relative shrink-0 h-full" style={{ aspectRatio: '1/1' }}>
+                  <img
+                    loading="lazy"
+                    src={prod.image_url || "https://picsum.photos/seed/prod/300/300"}
+                    alt={prod.name}
+                    className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                  {/* Type badge */}
+                  <span className={`absolute top-2 right-2 ${typeBg} text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm`}>
+                    {typeLabel}
+                  </span>
+                  {/* Favorite star */}
+                  {isFavorite(`prod_${prod.id}`) && (
+                    <span className="absolute top-2 left-2 text-yellow-400 text-sm drop-shadow">⭐</span>
+                  )}
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-bold text-gray-800">{prod.name}</h4>
-                    {isUnavailable && (
-                      <span className="text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-bold shrink-0">غير متوفر</span>
-                    )}
-                  </div>
-                  <p className={`${isUnavailable ? "text-gray-400" : theme.text} font-bold`}>
-                    {(prod.store_type === 'quantities' || prod.store_type === 'external_api')
-                      ? `${(parseFloat(prod.price_per_unit) || parseFloat(prod.price) || 0).toFixed(7)} $ / وحدة`
+
+                {/* Middle: Name, Description, Price — close to image */}
+                <div className="flex flex-col justify-center px-3 py-2 min-w-0 overflow-hidden items-start shrink-0 max-w-[45%]">
+                  <h4 className="font-bold text-gray-800 text-sm truncate w-full">{prod.name}</h4>
+                  {prod.description && (
+                    <p className="text-gray-400 text-[11px] leading-snug mt-0.5 line-clamp-2">{prod.description}</p>
+                  )}
+                  <p className={`${isUnavailable ? "text-gray-400" : theme.text} font-bold text-sm mt-1`}>
+                    {isQuantity
+                      ? `${(parseFloat(prod.price_per_unit) || 0).toFixed(6)} $ / وحدة`
                       : `${(parseFloat(prod.price) || 0).toFixed(2)} $`}
                   </p>
                 </div>
+
+                {/* Spacer */}
+                <div className="flex-1" />
+
+                {/* Left: Buy Button */}
+                <div className="flex flex-col items-center justify-center px-3 shrink-0">
+                  <button
+                    disabled={isUnavailable}
+                    onClick={() => {
+                      if (isUnavailable) return;
+                      if (!user) return setView({ type: "login" });
+                      if (isQuick) {
+                        setView({ type: "quick_order", data: prod });
+                      } else {
+                        setCheckoutQuantity(parseInt(String(prod.min_quantity)) || 0);
+                        setView({ type: "checkout", data: prod });
+                      }
+                    }}
+                    className={`px-4 py-2 rounded-xl font-bold text-sm transition-colors whitespace-nowrap ${isUnavailable ? "bg-gray-100 text-gray-400 cursor-not-allowed" : `${theme.button} text-white ${theme.buttonHover}`}`}
+                  >
+                    {isUnavailable ? "—" : isQuick ? "طلب" : isApi ? "⚡ شراء" : "شراء"}
+                  </button>
+                </div>
               </div>
-              <p className="text-gray-500 text-sm leading-relaxed">{prod.description || "لا يوجد وصف متاح لهذا المنتج."}</p>
-              {prod.store_type === 'external_api' && !isUnavailable && (
-                <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 text-[10px] font-bold px-3 py-1.5 rounded-lg w-fit">
-                  <ExternalLink size={11} />
-                  شحن فوري
+
+              {/* Unavailable overlay */}
+              {isUnavailable && (
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center pointer-events-none">
+                  <span className="bg-white/90 text-gray-700 text-xs font-bold px-3 py-1 rounded-full">غير متوفر</span>
                 </div>
               )}
-              <button
-                disabled={isUnavailable}
-                onClick={() => {
-                  if (isUnavailable) return;
-                  if (!user) return setView({ type: "login" });
-                  if (prod.store_type === 'quick_order') {
-                  quickOrderPlayerRef.current = "";
-                  setQuickOrderPlayerId("");
-                    setView({ type: "quick_order", data: prod });
-                  } else {
-                    checkoutPlayerRef.current = "";
-                    setCheckoutPlayerInput("");
-                    setCheckoutQuantity(parseInt(String(prod.min_quantity)) || 0);
-                    setView({ type: "checkout", data: prod });
-                  }
-                }}
-                className={`w-full py-3 rounded-xl font-bold transition-colors ${isUnavailable ? "bg-gray-100 text-gray-400 cursor-not-allowed" : `${theme.button} text-white ${theme.buttonHover}`}`}
-              >
-                {isUnavailable ? "غير متوفر حالياً" : prod.store_type === 'quick_order' ? "طلب سريع" : prod.store_type === 'external_api' ? "شراء الآن ⚡" : "شراء الآن"}
-              </button>
             </div>
             );
           })}
@@ -1841,7 +2689,7 @@ export default function App() {
 
   const QuickOrderView = () => {
     const prod = view.data;
-    // نستخدم الـ ref من مستوى الـ parent مباشرة — لا تضيع قيمته عند أي re-render
+    const [playerId, setPlayerId] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
@@ -1849,7 +2697,6 @@ export default function App() {
 
     const handleQuickOrder = async () => {
       if (!user) return;
-      const playerId = quickOrderPlayerRef.current?.trim() || "";
       if (!playerId) return setError("يرجى إدخال المعرف");
       
       setLoading(true);
@@ -1872,8 +2719,6 @@ export default function App() {
 
         const data = await res.json();
         if (data.success) {
-          quickOrderPlayerRef.current = "";
-          setQuickOrderPlayerId("");
           fetchUser(user.id);
           setView({ type: "success", data: "تم إرسال الطلب السريع بنجاح!" });
         } else {
@@ -1914,13 +2759,9 @@ export default function App() {
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700">ضع المعرف (ID)</label>
               <input 
-                type="text"
-                inputMode="text"
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="none"
-                defaultValue={quickOrderPlayerRef.current}
-                onChange={(e) => { quickOrderPlayerRef.current = e.target.value; }}
+                type="text" 
+                value={playerId}
+                onChange={(e) => setPlayerId(e.target.value)}
                 placeholder="أدخل المعرف هنا..."
                 className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-4 text-center text-lg font-bold outline-none focus:${theme.border}`}
               />
@@ -1949,34 +2790,33 @@ export default function App() {
   const CheckoutView = () => {
     const prod = view.data || (checkoutOrderResult?.prod);
     const qtyRef = React.useRef<HTMLInputElement>(null);
-    const extraRef = React.useRef<HTMLInputElement>(null);
-    // نستخدم checkoutPlayerRef من مستوى الـ parent — لا تضيع قيمتها عند أي re-render
     const [displayQty, setDisplayQty] = React.useState<string>(
       (prod.store_type === 'quantities' || prod.store_type === 'external_api') ? (String(checkoutQuantity || prod.min_quantity || 1)) : "1"
     );
+    const [extraInput, setExtraInput] = React.useState<string>("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const orderResult = checkoutOrderResult;
     const setOrderResult = setCheckoutOrderResult;
 
-    // حساب السعر بشكل صحيح - الكمية × سعر الوحدة
+    // حساب السعر بشكل صحيح
     const unitPrice = (prod.store_type === 'quantities' || prod.store_type === 'external_api')
       ? (parseFloat(String(prod.price_per_unit)) || parseFloat(String(prod.price)) || 0)
       : (parseFloat(String(prod.price)) || 0);
 
     const parsedQty = parseFloat(displayQty) || 0;
-    const safeQty = Math.max(prod.min_quantity || 1, parsedQty || prod.min_quantity || 1);
-    // السعر النهائي = الكمية × سعر الوحدة
+    const safeQty = Math.max(1, parsedQty || 1);
     const baseTotal = unitPrice * safeQty;
     const finalPrice = user?.is_vip ? baseTotal * 0.95 : baseTotal;
 
     const handlePurchase = async () => {
       if (!user) return;
-      // نقرأ Player ID من الـ ref المشترك مع الـ parent (لا يضيع عند re-render)
-      const extraData = checkoutPlayerRef.current?.trim() || "";
-      const quantity = parseFloat(qtyRef.current?.value || String(safeQty)) || safeQty;
+      if (loading) return; // منع الضغط المزدوج
+      const extraData = extraInput.trim();
+      const quantity = parseFloat(qtyRef.current?.value || String(displayQty) || "1") || 1;
       if (prod.requires_input && !extraData) return setError("يرجى إدخال البيانات المطلوبة");
       if ((prod.store_type === 'quantities' || prod.store_type === 'external_api') && quantity < (prod.min_quantity || 1)) return setError(`أقل كمية مسموحة هي ${prod.min_quantity}`);
+      if (prod.max_quantity && quantity > prod.max_quantity) return setError(`أكبر كمية مسموحة هي ${prod.max_quantity}`);
       setCheckoutQuantity(quantity);
       setLoading(true);
       try {
@@ -2001,8 +2841,6 @@ export default function App() {
         });
         const data = await res.json();
         if (data.success) {
-          checkoutPlayerRef.current = "";
-          setCheckoutPlayerInput("");
           fetchUser(user.id);
           if (data.pendingAdmin) {
             setView({ type: "success", data: "تم استلام طلبك بنجاح! سيتم مراجعته والرد عليك قريباً." });
@@ -2142,7 +2980,7 @@ export default function App() {
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
           <div className="flex items-center gap-4 pb-4 border-b border-gray-50">
             <div className="w-16 h-16 bg-gray-50 rounded-xl overflow-hidden">
-              <img src={prod.image_url || "https://picsum.photos/seed/prod/100/100"} alt={prod.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <img loading="lazy" src={prod.image_url || "https://picsum.photos/seed/prod/100/100"} alt={prod.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             </div>
             <div className="flex-1">
               <h4 className="font-bold text-gray-800">{prod.name}</h4>
@@ -2164,15 +3002,14 @@ export default function App() {
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700">
                 الكمية المطلوبة
-              {prod.min_quantity ? ` (أقل: ${prod.min_quantity}${prod.max_quantity ? ` · أعلى: ${prod.max_quantity}` : ''})` : ""}
+                {prod.min_quantity || prod.max_quantity ? ` (${prod.min_quantity ? `أقل: ${prod.min_quantity}` : ""}${prod.min_quantity && prod.max_quantity ? " — " : ""}${prod.max_quantity ? `أكثر: ${prod.max_quantity}` : ""})` : ""}
               </label>
               <input
                 ref={qtyRef}
                 type="number"
-                inputMode="numeric"
                 min={prod.min_quantity || 1}
                 max={prod.max_quantity || undefined}
-                defaultValue={displayQty}
+                value={displayQty}
                 onChange={(e) => setDisplayQty(e.target.value)}
                 className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:${theme.border} transition-colors`}
               />
@@ -2184,9 +3021,9 @@ export default function App() {
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700">رقم الهاتف</label>
               <input
-                ref={extraRef}
                 type="tel"
-                defaultValue=""
+                value={extraInput}
+                onChange={(e) => setExtraInput(e.target.value)}
                 placeholder="أدخل رقم هاتفك هنا..."
                 className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:${theme.border} transition-colors`}
               />
@@ -2201,12 +3038,8 @@ export default function App() {
               </label>
               <input
                 type="text"
-                inputMode="text"
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="none"
-                defaultValue={checkoutPlayerRef.current}
-                onChange={(e) => { checkoutPlayerRef.current = e.target.value; }}
+                value={extraInput}
+                onChange={(e) => setExtraInput(e.target.value)}
                 placeholder={`أدخل ${prod.params?.[0] || "معرف اللاعب"} هنا...`}
                 className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-blue-400 transition-colors text-center font-bold text-lg`}
               />
@@ -2219,14 +3052,9 @@ export default function App() {
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700">معرف اللاعب / رقم الحساب / رقم الهاتف للرصيد</label>
               <input
-                ref={extraRef}
                 type="text"
-                inputMode="text"
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="none"
-                defaultValue={checkoutPlayerRef.current}
-                onChange={(e) => { checkoutPlayerRef.current = e.target.value; }}
+                value={extraInput}
+                onChange={(e) => setExtraInput(e.target.value)}
                 placeholder="أدخل البيانات هنا..."
                 className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:${theme.border} transition-colors`}
               />
@@ -2236,23 +3064,17 @@ export default function App() {
           <div className="space-y-3 pt-4">
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">سعر الوحدة</span>
-              <span className="font-bold font-mono">
-                {(prod.store_type === 'quantities' || prod.store_type === 'external_api') ? unitPrice.toFixed(7) : unitPrice.toFixed(7)} $
+              <span className="font-bold">
+                {(prod.store_type === 'quantities' || prod.store_type === 'external_api') ? unitPrice.toFixed(6) : unitPrice.toFixed(2)} $
               </span>
             </div>
-            {(prod.store_type === 'quantities' || prod.store_type === 'external_api') && (
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">الكمية</span>
-                <span className="font-bold">{safeQty}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-sm bg-gray-50 rounded-xl px-3 py-2">
-              <span className="text-gray-600 font-bold">
-                {(prod.store_type === 'quantities' || prod.store_type === 'external_api')
-                  ? `${unitPrice.toFixed(7)} × ${safeQty}`
-                  : 'المجموع'}
-              </span>
-              <span className="font-bold">{baseTotal.toFixed(7)} $</span>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">الكمية</span>
+              <span className="font-bold">{safeQty}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">المجموع الفرعي</span>
+              <span className="font-bold">{baseTotal.toFixed(2)} $</span>
             </div>
             {user?.is_vip && (
               <div className="flex justify-between text-sm text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100">
@@ -2260,7 +3082,7 @@ export default function App() {
                   <Star size={14} fill="currentColor" />
                   <span>خصم VIP ({siteSettings?.find((s:any)=>s.key==="vip_discount")?.value || "5"}%)</span>
                 </div>
-                <span className="font-bold">- {(baseTotal * 0.05).toFixed(7)} $</span>
+                <span className="font-bold">- {(baseTotal * 0.05).toFixed(2)} $</span>
               </div>
             )}
             <div className="flex justify-between text-lg border-t border-gray-100 pt-3 mt-2">
@@ -2293,264 +3115,17 @@ export default function App() {
     );
   };
 
-  const WalletView = () => {
-    const selectedMethod = selectedPaymentMethod;
-    const setSelectedMethod = setSelectedPaymentMethod;
-    const [amount, setAmount] = useState("");
-    const [note, setNote] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [receiptUrl, setReceiptUrl] = useState("");
-    const [uploading, setUploading] = useState(false);
-    const [txNumber, setTxNumber] = useState("");
+  const WalletView = () => (
+    <WalletChargeView
+      user={user}
+      paymentMethods={paymentMethods}
+      showToast={showToast}
+      setView={setView}
+      fetchUser={fetchUser}
+      fetchTransactions={fetchTransactions}
+    />
+  );
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      setUploading(true);
-      const formData = new FormData();
-      formData.append("image", file);
-
-      try {
-        const imgbbKey = (import.meta as any).env.VITE_IMGBB_API_KEY || "97ffbf56fe1a203445531d664cd4b928";
-        const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbKey}`, {
-          method: "POST",
-          body: formData
-        });
-        const data = await res.json();
-        if (data.success) {
-          setReceiptUrl(data.data.url);
-        } else {
-          console.error("ImgBB Error:", data);
-          alert("فشل رفع الصورة: " + (data.error?.message || "خطأ غير معروف"));
-        }
-      } catch (err) {
-        console.error("Upload Error:", err);
-        alert("خطأ في الاتصال بخادم الصور");
-      } finally {
-        setUploading(false);
-      }
-    };
-
-    const clearReceipt = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      e.preventDefault();
-      setReceiptUrl("");
-    };
-
-    const handleAutoTopUp = async () => {
-      if (!user || !selectedMethod || !amount || !txNumber) {
-        alert("يرجى إدخال المبلغ ورقم العملية");
-        return;
-      }
-      setLoading(true);
-      try {
-        const res = await fetch("/api/transactions/verify-auto", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("authToken") || ""}` },
-          body: JSON.stringify({
-            userId: user.id,
-            paymentMethodId: selectedMethod.id,
-            amount: parseFloat(amount),
-            txNumber: txNumber.trim()
-          })
-        });
-        const data = await res.json();
-        if (data.success) {
-          fetchUser(user.id);
-          fetchTransactions();
-          const added = data.addedUsd ?? parseFloat(amount);
-          const orig = data.originalAmount ? ` (${data.originalAmount} ${data.currency})` : "";
-          setView({ type: "success", data: `✅ تم شحن ${added.toFixed(4)}$${orig} بنجاح عبر ${selectedMethod.name}!` });
-        } else {
-          alert(data.error || "فشل التحقق");
-        }
-      } catch (e) {
-        alert("فشل الاتصال بالخادم");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const handleTopUp = async () => {
-      if (!user || !selectedMethod || !amount || !receiptUrl) {
-        alert("يرجى إكمال جميع البيانات ورفع الإيصال");
-        return;
-      }
-      
-      const numAmount = parseFloat(amount);
-      if (numAmount < selectedMethod.min_amount) {
-        alert(`أقل مبلغ للشحن عبر هذه الطريقة هو ${selectedMethod.min_amount} $`);
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const res = await fetch("/api/transactions/upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("authToken") || ""}` },
-          body: JSON.stringify({
-            userId: user.id,
-            paymentMethodId: selectedMethod.id,
-            amount: numAmount,
-            note,
-            receiptImageUrl: receiptUrl
-          })
-        });
-        const data = await res.json();
-        if (data.success) {
-          setView({ type: "success", data: "تم إرسال طلب الشحن بنجاح، يرجى انتظار التحقق." });
-          fetchTransactions();
-        } else {
-          alert(data.error || "فشل إرسال الطلب");
-        }
-      } catch (e) {
-        alert("فشل الاتصال بالخادم، يرجى المحاولة لاحقاً");
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (selectedMethod) {
-      const isAuto = selectedMethod.method_type === 'syriatel' || selectedMethod.method_type === 'shamcash';
-      return (
-        <div className="px-4 space-y-6 pb-20">
-          <div className="flex items-center gap-2 mb-6">
-            <button onClick={() => setSelectedMethod(null)} className="p-2 bg-gray-100 rounded-full">
-              <ArrowRight size={20} className="text-gray-600" />
-            </button>
-            <h2 className="text-xl font-bold text-gray-800">شحن عبر {selectedMethod.name}</h2>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-6">
-            {isAuto ? (
-              /* --- Auto verify UI (Syriatel / ShamCash) --- */
-              <>
-                <div className="bg-green-50 p-4 rounded-xl border border-green-100 text-center space-y-1">
-                  <p className="text-green-700 font-bold text-sm">✅ شحن تلقائي فوري</p>
-                  <p className="text-green-600 text-xs">يتم التحقق من العملية تلقائياً وإضافة الرصيد فوراً 
-في حال كانت العملية بالليرة السورية سيتم تعبئة رصيد بـ1$ لكل 120 ل.س جديدو</p>
-                </div>
-                <div className="bg-brand-light p-4 rounded-xl border border-brand-soft text-center">
-                  <p className="text-brand text-xs mb-1">
-                    {selectedMethod.method_type === 'syriatel' ? 'رقم سيريتل كاش' : 'عنوان شام كاش'}
-                  </p>
-                  <p className="text-xl font-bold text-brand tracking-wider">{selectedMethod.wallet_address}</p>
-                  {selectedMethod.min_amount > 0 && (
-                    <p className="text-xs text-brand mt-2 font-bold">أقل مبلغ: {selectedMethod.min_amount} $</p>
-                  )}
-                </div>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700">اكتب قيمة المبلغ المرسل ان كان $ او ل.س </label>
-                    <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00"
-                      className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700">رقم العملية (Transaction ID)</label>
-                    <input type="text" value={txNumber} onChange={e => setTxNumber(e.target.value)}
-                      placeholder={selectedMethod.method_type === 'syriatel' ? 'مثال: 123456789' : 'مثال: 987654321'}
-                      className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand font-mono" />
-                    <p className="text-xs text-gray-400">أدخل رقم العملية كما يظهر في تطبيق {selectedMethod.name}</p>
-                  </div>
-                  <button disabled={loading || !txNumber || !amount} onClick={handleAutoTopUp}
-                    className="w-full bg-brand text-white py-4 rounded-xl font-bold shadow-lg shadow-brand-soft disabled:opacity-50">
-                    {loading ? "جاري التحقق..." : "تحقق وشحن فوراً"}
-                  </button>
-                </div>
-              </>
-            ) : (
-              /* --- Manual verify UI (existing) --- */
-              <>
-                <div className="bg-brand-light p-4 rounded-xl border border-brand-soft text-center">
-                  <p className="text-brand text-sm mb-1">رقم المحفظة / العنوان</p>
-                  <p className="text-2xl font-bold text-brand tracking-wider">{selectedMethod.wallet_address}</p>
-                  {selectedMethod.min_amount > 0 && (
-                    <p className="text-xs text-brand mt-2 font-bold">أقل مبلغ: {selectedMethod.min_amount} $</p>
-                  )}
-                </div>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700">المبلغ المراد شحنه</label>
-                    <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00"
-                      className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700">ملاحظات إضافية</label>
-                    <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="اختياري..."
-                      className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand h-24 resize-none" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-700">إرفاق صورة الإيصال</label>
-                    <label className="w-full h-32 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-2 text-gray-400 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors relative overflow-hidden">
-                      {receiptUrl ? (
-                        <>
-                          <img src={receiptUrl} className="w-full h-full object-cover" alt="Receipt" referrerPolicy="no-referrer" />
-                          <button onClick={clearReceipt} className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-colors z-10"><X size={16} /></button>
-                        </>
-                      ) : (
-                        <>
-                          <ImageIcon size={32} />
-                          <span className="text-xs">{uploading ? "جاري الرفع..." : "اضغط لرفع الصورة"}</span>
-                        </>
-                      )}
-                      <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
-                    </label>
-                  </div>
-                  <button disabled={loading || uploading || !receiptUrl} onClick={handleTopUp}
-                    className="w-full bg-brand text-white py-4 rounded-xl font-bold shadow-lg shadow-brand-soft disabled:opacity-50">
-                    {loading ? "جاري الإرسال..." : "إرسال طلب التحقق"}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="px-4 space-y-6 pb-20">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">شحن الرصيد</h2>
-        
-        <button 
-          onClick={() => setView({ type: "voucher_redeem" })}
-          className="w-full bg-gradient-to-r from-brand to-brand-soft p-6 rounded-2xl text-white shadow-lg shadow-brand-soft flex items-center justify-between mb-8"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <Ticket size={28} />
-            </div>
-            <div className="text-right">
-              <h3 className="font-bold text-lg">استرداد كود رصيد</h3>
-              <p className="text-white/80 text-xs">اشحن رصيدك عبر الأكواد والقسائم</p>
-            </div>
-          </div>
-          <ChevronRight size={24} className="text-white/60" />
-        </button>
-
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-gray-800">طرق الشحن المباشر</h3>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          {paymentMethods.map(method => (
-            <button 
-              key={method.id}
-              onClick={() => setSelectedMethod(method)}
-              className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center gap-2 hover:border-brand-soft transition-colors"
-            >
-              <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center overflow-hidden">
-                <img src={method.image_url || "https://picsum.photos/seed/pay/100/100"} alt={method.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              </div>
-              <span className="font-bold text-gray-800 text-[10px] text-center">{method.name}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  };
 
   const PaymentsView = () => {
     const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -2628,7 +3203,7 @@ export default function App() {
                     <div>
                       <p className="text-gray-400 text-xs mb-2">صورة الإيصال</p>
                       <div className="w-full h-48 bg-white rounded-lg border border-gray-200 overflow-hidden">
-                        <img 
+                        <img loading="lazy" 
                           src={t.receipt_image_url} 
                           alt="Receipt" 
                           className="w-full h-full object-contain"
@@ -2657,6 +3232,26 @@ export default function App() {
 
   const OrdersView = () => {
     const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
+    const [filterStatus, setFilterStatus] = useState<'all'|'completed'|'failed'|'pending'>('all');
+
+    const completedCount = orders.filter(o => o.status === 'completed').length;
+    const failedCount    = orders.filter(o => o.status === 'failed' || o.status === 'cancelled').length;
+    const pendingCount   = orders.filter(o => o.status !== 'completed' && o.status !== 'failed' && o.status !== 'cancelled').length;
+
+    const filteredOrders = orders.filter(o => {
+      if (filterStatus === 'all')       return true;
+      if (filterStatus === 'completed') return o.status === 'completed';
+      if (filterStatus === 'failed')    return o.status === 'failed' || o.status === 'cancelled';
+      if (filterStatus === 'pending')   return o.status !== 'completed' && o.status !== 'failed' && o.status !== 'cancelled';
+      return true;
+    });
+
+    const filters: { key: 'all'|'completed'|'failed'|'pending'; label: string; count?: number; color: string }[] = [
+      { key: 'all',       label: 'الكل',         color: 'bg-gray-800 text-white' },
+      { key: 'completed', label: 'مكتملة',  count: completedCount, color: 'bg-green-500 text-white' },
+      { key: 'failed',    label: 'مرفوضة',  count: failedCount,    color: 'bg-red-500 text-white' },
+      { key: 'pending',   label: 'قيد المراجعة', count: pendingCount, color: 'bg-blue-500 text-white' },
+    ];
 
     const getOrderCodes = (metaStr: string): string[] => {
       try {
@@ -2703,10 +3298,33 @@ export default function App() {
     };
 
     return (
-      <div className="px-4 space-y-6 pb-20">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">طلباتي</h2>
+      <div className="px-4 space-y-4 pb-20">
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">طلباتي</h2>
+
+        {/* شريط التصفية */}
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+          {filters.map(f => (
+            <button
+              key={f.key}
+              onClick={() => { setFilterStatus(f.key); setExpandedOrderId(null); }}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all active:scale-95 border ${
+                filterStatus === f.key
+                  ? f.color + ' border-transparent shadow-sm'
+                  : 'bg-white border-gray-100 text-gray-500'
+              }`}
+            >
+              {f.label}
+              {f.count !== undefined && (
+                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+                  filterStatus === f.key ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-600'
+                }`}>{f.count}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
         <div className="space-y-3">
-          {orders.map(order => (
+          {filteredOrders.map(order => (
             <div key={order.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
               <div
                 onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
@@ -2827,13 +3445,17 @@ export default function App() {
               )}
             </div>
           ))}
-          {orders.length === 0 && (
-            <div className="text-center py-20 space-y-4">
+          {filteredOrders.length === 0 && (
+            <div className="text-center py-16 space-y-4">
               <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto text-gray-300">
                 <ShoppingBag size={40} />
               </div>
-              <p className="text-gray-400">لم تقم بأي طلبات بعد</p>
-              <button onClick={() => setActiveTab("home")} className="text-brand font-bold">ابدأ التسوق الآن</button>
+              <p className="text-gray-400">
+                {filterStatus === 'all' ? 'لم تقم بأي طلبات بعد' : 'لا توجد طلبات في هذا التصنيف'}
+              </p>
+              {filterStatus === 'all' && (
+                <button onClick={() => setActiveTab("home")} className="text-brand font-bold">ابدأ التسوق الآن</button>
+              )}
             </div>
           )}
         </div>
@@ -2842,241 +3464,88 @@ export default function App() {
   };
 
   const ProfileView = () => {
-    const [uploading, setUploading] = useState(false);
-
-    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      setUploading(true);
-      try {
-        const formData = new FormData();
-        formData.append("image", file);
-        const imgbbKey = (import.meta as any).env.VITE_IMGBB_API_KEY || "97ffbf56fe1a203445531d664cd4b928";
-        const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbKey}`, { method: "POST", body: formData });
-        const data = await res.json();
-        if (data.success) {
-          const updateRes = await fetch(`/api/user/${user?.id}/avatar`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("authToken")||""}` },
-            body: JSON.stringify({ avatar_url: data.data.url })
-          });
-          if (updateRes.ok) { fetchUser(user!.id); alert("تم تحديث الصورة الشخصية بنجاح"); }
-          else { const err = await updateRes.json().catch(()=>({})); alert("فشل حفظ الصورة: "+(err.error||updateRes.status)); }
-        }
-      } catch { alert("فشل رفع الصورة"); } finally { setUploading(false); }
-    };
-
     return (
-      <div className="px-4 space-y-5 pb-20">
+      <div className="px-4 space-y-4 pb-20">
 
-        {/* بطاقة الملف الشخصي */}
-        <div className={`bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center text-center space-y-3 ${user?.is_vip ? 'vip-card-glow border-amber-200 shadow-amber-50' : ''}`}>
-          
-          {/* زر معلومات الحساب */}
-          <div className="w-full flex justify-end -mb-1">
-            <button
-              onClick={() => setView({ type: "profile_details" })}
-              className="p-2 bg-gray-100 hover:bg-brand-light text-gray-500 hover:text-brand rounded-xl transition-all active:scale-90"
-              title="معلومات الحساب التفصيلية"
-            >
-              <Pencil size={16} />
-            </button>
+        {/* صورة الحساب */}
+        <div className="flex flex-col items-center pt-6 pb-2">
+          <div className={`w-24 h-24 ${theme.bgLight} rounded-full flex items-center justify-center ${theme.icon} border-4 border-white shadow-lg ${theme.shadow} overflow-hidden ${user?.is_vip ? 'vip-glow' : ''} ${user?.stats?.frame ? `frame-${user.stats.frame}` : ''}`}>
+            {user?.avatar_url ? (
+              <img loading="lazy" src={user.avatar_url} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            ) : <User size={48} />}
           </div>
-
-          {/* الصورة الشخصية */}
-          <div className="relative">
-            <div className={`w-24 h-24 ${theme.bgLight} rounded-full flex items-center justify-center ${theme.icon} border-4 border-white shadow-lg ${theme.shadow} overflow-hidden ${user?.is_vip ? 'vip-glow' : ''} ${user?.stats?.frame ? `frame-${user.stats.frame}` : ''}`}>
-              {user?.avatar_url ? (
-                <img src={user.avatar_url} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              ) : <User size={48} />}
-              {uploading && (
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                </div>
-              )}
-            </div>
-            <label className="absolute bottom-0 right-0 bg-brand text-white p-2 rounded-full cursor-pointer shadow-lg hover:opacity-90 transition-colors">
-              <Plus size={16} />
-              <input type="file" className="hidden" accept="image/*" onChange={handleAvatarUpload} disabled={uploading} />
-            </label>
-          </div>
-
-          {/* الاسم والبيانات */}
-          <div>
-            <div className="flex items-center justify-center gap-2 flex-wrap">
-              <h2 className={`text-xl font-bold text-gray-800 ${user?.is_vip ? 'vip-text-glow' : ''}`}>{user?.name || "زائر"}</h2>
-              {user?.is_vip && <span className="vip-badge"><Crown size={10} />VIP</span>}
-              {user?.stats?.profile_badge && (
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold badge-${user.stats.profile_badge} inline-flex items-center gap-1`}>
-                  {user.stats.profile_badge === 'bronze' && <Award size={10} />}
-                  {user.stats.profile_badge === 'active' && <Star size={10} />}
-                  {user.stats.profile_badge === 'energy' && <Zap size={10} />}
-                  {user.stats.profile_badge === 'silver' && <ShieldCheck size={10} />}
-                  {user.stats.profile_badge === 'gold' && <Crown size={10} />}
-                  {user.stats.profile_badge === 'diamond' && <Star size={10} />}
-                  {user.stats.profile_badge === 'legendary' && <Crown size={10} />}
-                </span>
-              )}
-            </div>
-            <p className="text-gray-400 text-sm mt-0.5">{user?.email || "قم بتسجيل الدخول للوصول لكافة الميزات"}</p>
-            {user?.id && <p className="text-xs text-brand font-bold mt-1">رقم الدخول: #{user.id}</p>}
-            {user?.stats?.user_title && (
-              <p className="text-xs font-bold mt-1 text-purple-600 flex items-center justify-center gap-1"><Award size={11} /> {user.stats.user_title}</p>
-            )}
-          </div>
-
-          {/* أزرار الإجراءات السريعة - 3 أزرار في صف */}
-          {user && (
-            <div className="w-full grid grid-cols-3 gap-2 pt-1">
-              {user.telegram_chat_id ? (
-                <button onClick={handleUnlinkTelegram} className="bg-red-50 text-red-600 p-3 rounded-2xl border border-red-100 flex flex-col items-center gap-1 transition-all active:scale-95">
-                  <LogOut size={18} />
-                  <span className="text-[10px] font-bold">إلغاء تليجرام</span>
-                </button>
-              ) : (
-                <button onClick={handleGenerateLinkingCode} className="bg-blue-50 text-blue-600 p-3 rounded-2xl border border-blue-100 flex flex-col items-center gap-1 transition-all active:scale-95">
-                  <MessageSquare size={18} />
-                  <span className="text-[10px] font-bold">ربط تليجرام</span>
-                </button>
-              )}
-              <button onClick={() => setView({ type: "referral" })} className="bg-brand-light text-brand p-3 rounded-2xl border border-brand-soft flex flex-col items-center gap-1 transition-all active:scale-95">
-                <Plus size={18} />
-                <span className="text-[10px] font-bold">الإحالة</span>
-              </button>
-              <button onClick={() => setView({ type: "payments" })} className="bg-green-50 text-green-600 p-3 rounded-2xl border border-green-100 flex flex-col items-center gap-1 transition-all active:scale-95">
-                <History size={18} />
-                <span className="text-[10px] font-bold">دفعاتي</span>
-              </button>
-            </div>
-          )}
         </div>
 
-        {/* حالة تليجرام */}
-        {user && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${user?.telegram_chat_id ? 'bg-blue-100' : 'bg-orange-100'}`}>
-                <MessageSquare size={16} className={user?.telegram_chat_id ? 'text-blue-600' : 'text-orange-500'} />
-              </div>
-              <div>
-                <p className={`text-sm font-bold ${user?.telegram_chat_id ? 'text-blue-800' : 'text-orange-700'}`}>
-                  {user?.telegram_chat_id ? 'تليجرام مرتبط' : 'تليجرام غير مرتبط'}
-                </p>
-                <p className={`text-[10px] ${user?.telegram_chat_id ? 'text-blue-400' : 'text-orange-400'}`}>
-                  {user?.telegram_chat_id ? 'حسابك مؤمن بالبوت' : 'اربط للحصول على إشعارات'}
-                </p>
-              </div>
-            </div>
-            {user?.telegram_chat_id ? (
-              <button onClick={handleUnlinkTelegram} className="text-[10px] font-bold text-red-500 bg-red-50 px-3 py-1.5 rounded-xl border border-red-100">فك الربط</button>
-            ) : (
-              <button onClick={handleGenerateLinkingCode} className="text-[10px] font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-200">ربط الآن</button>
+        {/* الاسم + الشارة بجانب بعض */}
+        {user?.name && (
+          <div className="flex items-center justify-center gap-2 -mt-1 flex-wrap">
+            <p className="text-base font-semibold text-gray-800">{user.name}</p>
+            {user?.stats?.profile_badge && (
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold badge-${user.stats.profile_badge} inline-flex items-center gap-1`}>
+                {user.stats.profile_badge === 'bronze' && <Award size={10} />}
+                {user.stats.profile_badge === 'active' && <Star size={10} />}
+                {user.stats.profile_badge === 'energy' && <Zap size={10} />}
+                {user.stats.profile_badge === 'silver' && <ShieldCheck size={10} />}
+                {user.stats.profile_badge === 'gold' && <Crown size={10} />}
+                {user.stats.profile_badge === 'diamond' && <Star size={10} />}
+                {user.stats.profile_badge === 'legendary' && <Crown size={10} />}
+              </span>
+            )}
+            {user?.is_vip && <span className="vip-badge"><Crown size={10} />VIP</span>}
+          </div>
+        )}
+
+        {/* رقم الدخول + اللقب بجانب بعض */}
+        {user?.id && (
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            <span className="text-sm font-bold text-brand">#{user.id}</span>
+            {user?.stats?.user_title && (
+              <span className="text-xs font-bold text-purple-600 flex items-center gap-1">
+                <Award size={11} /> {user.stats.user_title}
+              </span>
             )}
           </div>
         )}
 
-        {/* نظام المكافآت */}
-        {user && user.stats && (
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Star size={18} className="text-amber-500" />
-                <h3 className="font-bold text-gray-800">نظام المكافآت</h3>
+        {/* 3 أزرار: ربط تليجرام / الإحالة / دفعاتي */}
+        {user && (
+          <div className="grid grid-cols-3 gap-2 pt-1">
+            {user.telegram_chat_id ? (
+              <div className="bg-blue-50 text-blue-600 p-3 rounded-2xl border border-blue-100 flex flex-col items-center gap-1">
+                <MessageSquare size={18} />
+                <span className="text-[10px] font-bold">تليجرام مرتبط</span>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold bg-amber-50 text-amber-600 px-2 py-1 rounded-lg">
-                  {user.stats.total_recharge_sum.toFixed(2)} $
-                </span>
-                <button onClick={() => setShowAllRewards(!showAllRewards)} className="p-1 hover:bg-gray-100 rounded-lg transition-colors text-gray-400">
-                  {showAllRewards ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                </button>
-              </div>
-            </div>
-            <div className="space-y-4">
-              {REWARD_GOALS.map((goal, index) => {
-                const isClaimed = user.stats!.claimed_reward_index >= index;
-                const isReached = user.stats!.total_recharge_sum >= goal.target;
-                const isCurrent = user.stats!.claimed_reward_index === index - 1;
-                const prevTarget = index === 0 ? 0 : REWARD_GOALS[index - 1].target;
-                const progress = Math.min(100, Math.max(0, ((user.stats!.total_recharge_sum - prevTarget) / (goal.target - prevTarget)) * 100));
-                if (!showAllRewards && !isCurrent) return null;
-                return (
-                  <div key={goal.id} className={`space-y-3 p-4 rounded-2xl border transition-all ${isClaimed ? 'bg-brand-light border-brand-soft' : isCurrent ? 'bg-amber-50 border-amber-100 shadow-sm' : 'bg-gray-50 border-gray-100 opacity-40'}`}>
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="flex items-start gap-2 min-w-0">
-                        <div className={`w-9 h-9 shrink-0 rounded-xl flex items-center justify-center text-base ${isClaimed ? 'bg-brand/10' : isCurrent ? 'bg-amber-100' : 'bg-gray-100'}`}>
-                          {goal.icon}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-bold text-sm text-gray-800">{goal.title}</p>
-                          <p className="text-[10px] text-gray-500 mt-0.5 leading-relaxed">{goal.rewardText}</p>
-                          {(goal as any).rewards?.discount && (
-                            <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
-                              🏷️ خصم {(goal as any).rewards.discount}% مدى الحياة
-                            </span>
-                          )}
-                          {isClaimed && (goal as any).rewards?.frame && (
-                            <span className="inline-flex items-center gap-1 mt-1 ml-1 text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">🖼️ إطار مفعّل</span>
-                          )}
-                          {isClaimed && (goal as any).rewards?.badge && (
-                            <span className="inline-flex items-center gap-1 mt-1 ml-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">🏅 شارة مفعّلة</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="shrink-0">
-                        {isClaimed ? (
-                          <span className="flex items-center gap-1 text-[10px] font-bold text-brand whitespace-nowrap"><CheckCircle size={13} />تم</span>
-                        ) : isReached ? (
-                          <button
-                            onClick={async () => {
-                              try {
-                                const res = await fetch("/api/rewards/claim", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("authToken") || ""}` }, body: JSON.stringify({ goalIndex: index }) });
-                                const resData = await res.json();
-                                if (res.ok) {
-                                  alert("🎁 مبروك! تم استلام المكافأة بنجاح");
-                                  if (resData.stats) { setUser(prev => prev ? { ...prev, stats: resData.stats } : prev); }
-                                  fetchUser(user.id);
-                                } else { alert(resData.error || "فشل استلام المكافأة"); }
-                              } catch (error) { 
-  alert("خطأ في الاتصال");
-                                }
-                            }}
-                            className="bg-brand text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm active:scale-95 transition-all whitespace-nowrap"
-                          >استلام 🎁</button>
-                        ) : (
-                          <span className="text-[10px] font-bold text-amber-600 whitespace-nowrap">{(goal.target - user.stats!.total_recharge_sum).toFixed(0)} $ متبقي</span>
-                        )}
-                      </div>
-                    </div>
-                    {!isClaimed && (
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-[10px] text-gray-400">
-                          <span>{prevTarget} $</span><span>{goal.target} $</span>
-                        </div>
-                        <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                          <div className={`h-full transition-all duration-500 ${isReached ? 'bg-brand' : 'bg-amber-400'}`} style={{ width: `${progress}%` }} />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            ) : (
+              <button onClick={handleGenerateLinkingCode} className="bg-orange-50 text-orange-600 p-3 rounded-2xl border border-orange-100 flex flex-col items-center gap-1 transition-all active:scale-95">
+                <MessageSquare size={18} />
+                <span className="text-[10px] font-bold leading-tight text-center">اربط الآن</span>
+              </button>
+            )}
+            <button onClick={() => setView({ type: "referral" })} className="bg-brand-light text-brand p-3 rounded-2xl border border-brand-soft flex flex-col items-center gap-1 transition-all active:scale-95">
+              <Share2 size={18} />
+              <span className="text-[10px] font-bold">الإحالة</span>
+            </button>
+            <button onClick={() => setView({ type: "payments" })} className="bg-green-50 text-green-600 p-3 rounded-2xl border border-green-100 flex flex-col items-center gap-1 transition-all active:scale-95">
+              <History size={18} />
+              <span className="text-[10px] font-bold">دفعاتي</span>
+            </button>
           </div>
+        )}
+
+        {/* زر نظام المكافآت والترتيب */}
+        {user && (
+          <button onClick={() => setView({ type: "rewards_leaderboard" })} className="w-full bg-gradient-to-r from-amber-50 to-yellow-50 text-amber-700 py-3 rounded-2xl border border-amber-100 flex items-center justify-center gap-2 transition-all active:scale-95 font-bold text-sm">
+            <Trophy size={18} className="text-amber-500" />
+            نظام المكافآت والترتيب
+          </button>
         )}
 
         {/* قائمة الإجراءات */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50 overflow-hidden">
+        <div className="space-y-2">
+          <ProfileItem icon={<UserCircle size={20} />} label="معلومات الحساب" onClick={() => setView({ type: "profile_details" })} />
           <ProfileItem icon={<User size={20} />} label="تعديل الملف الشخصي" onClick={() => setView({ type: "edit_profile" })} />
-          {!!user?.stats?.has_special_support && (
-            <ProfileItem icon={<ShieldCheck size={20} />} label="الدعم الخاص (الأولوية)" className="text-amber-600 bg-amber-50/50" onClick={() => alert("لديك أولوية في الدعم الفني. تواصل معنا عبر الواتساب.")} />
-          )}
           <ProfileItem icon={<Settings size={20} />} label="الإعدادات" onClick={() => setView({ type: "settings" })} />
-          <ProfileItem icon={<Clock size={20} />} label="سياسة الخصوصية" onClick={() => setView({ type: "privacy_policy" })} />
-          <ProfileItem icon={<MessageSquare size={20} />} label="الدعم الفني" onClick={() => setView({ type: "chat" })} className="text-brand relative" badge={user?.unread_support_count > 0 ? user.unread_support_count : undefined} />
-          {!!user?.stats?.custom_theme_color && (
-            <ProfileItem icon={<Palette size={20} />} label="تخصيص الثيم" onClick={() => setThemeModal({ isOpen: true, color: user.stats.custom_theme_color === 'any' ? '#10b981' : user.stats.custom_theme_color })} className="text-brand" />
-          )}
+          <ProfileItem icon={<Headphones size={20} />} label="الدعم الفني" onClick={() => setView({ type: "chat" })} className="text-brand relative" badge={user?.unread_support_count > 0 ? user.unread_support_count : undefined} />
           {user ? (
             <ProfileItem icon={<LogOut size={20} />} label="تسجيل الخروج" onClick={handleLogout} className="text-red-500" />
           ) : (
@@ -3086,7 +3555,7 @@ export default function App() {
 
         {/* Syrbit Copyright */}
         <div className="flex justify-center py-4">
-          <a href="https://wa.me/212773963897" target="_blank" rel="noopener noreferrer"
+          <a href="https://chat.whatsapp.com/DELXtdEh9ua5edFTupESNU" target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-1.5 text-[10px] text-gray-400 hover:text-purple-500 transition-colors">
             <span>برمجة شركة</span>
             <span className="font-black text-purple-500">Syrbit</span>
@@ -3098,7 +3567,7 @@ export default function App() {
   };
 
     const ProfileItem = ({ icon, label, onClick, className = "", badge }: any) => (
-    <button onClick={onClick} className={`w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors ${className}`}>
+    <button onClick={onClick} className={`w-full flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-100 shadow-sm active:scale-[0.98] transition-all ${className}`}>
       <div className="flex items-center gap-4">
         <span className="text-gray-400">{icon}</span>
         <span className="font-medium text-gray-700">{label}</span>
@@ -3547,6 +4016,11 @@ export default function App() {
             localStorage.removeItem("referralCode");
             setView({ type: "main" });
             setActiveTab("home");
+            // Show onboarding only after registration (not login)
+            if (isRegister) {
+              setOnboardingStep(0);
+              setShowOnboarding(true);
+            }
           }
         } else {
           if (data.requiresVerification) {
@@ -3582,6 +4056,11 @@ export default function App() {
               localStorage.removeItem("referralCode");
               setView({ type: "main" });
               setActiveTab("home");
+              // Show onboarding after registration via OTP
+              if (isRegister) {
+                setOnboardingStep(0);
+                setShowOnboarding(true);
+              }
             } else {
               setVerifyEmail(null);
             }
@@ -3706,8 +4185,41 @@ export default function App() {
             {isRegister ? "لديك حساب بالفعل؟ سجل دخولك" : "ليس لديك حساب؟ أنشئ حساباً جديداً"}
           </button>
 
+          {/* Google Sign-In */}
+          <div className="relative flex items-center py-2">
+            <div className="flex-grow border-t border-gray-200"></div>
+            <span className="mx-3 text-xs text-gray-400 font-medium">أو</span>
+            <div className="flex-grow border-t border-gray-200"></div>
+          </div>
+          <button
+            onClick={() => {
+              const clientId = (import.meta as any).env.VITE_GOOGLE_CLIENT_ID;
+              if (!clientId) { setError("تسجيل الدخول عبر Google غير مفعّل حالياً"); return; }
+              const redirectUri = window.location.origin;
+              const params = new URLSearchParams({
+                client_id: clientId,
+                redirect_uri: redirectUri,
+                response_type: 'token',
+                scope: 'openid email profile',
+                state: 'google_oauth',
+                prompt: 'select_account',
+                include_granted_scopes: 'true',
+              });
+              window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+            }}
+            className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-200 rounded-2xl py-3.5 font-bold text-gray-700 text-sm shadow-sm active:scale-95 transition-all hover:border-gray-300"
+          >
+            <svg width="20" height="20" viewBox="0 0 48 48">
+              <path fill="#FFC107" d="M43.6 20H24v8h11.3C33.6 33.6 29.3 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l5.7-5.7C34.6 5.1 29.6 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21c11.1 0 20.4-8.1 20.4-21 0-1.4-.1-2.7-.4-4z"/>
+              <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.1 8.1 2.9l5.7-5.7C34.6 5.1 29.6 3 24 3 16.3 3 9.7 7.9 6.3 14.7z"/>
+              <path fill="#4CAF50" d="M24 45c5.5 0 10.4-1.9 14.2-5.1l-6.6-5.4C29.6 36 26.9 37 24 37c-5.2 0-9.6-3.4-11.2-8.1l-6.6 5.1C9.7 41.1 16.3 45 24 45z"/>
+              <path fill="#1976D2" d="M43.6 20H24v8h11.3c-.8 2.2-2.2 4-4 5.4l6.6 5.4C41.8 35.4 44 30.1 44 24c0-1.4-.1-2.7-.4-4z"/>
+            </svg>
+            تسجيل الدخول عبر Google
+          </button>
+
           <button 
-            onClick={() => setView({ type: "chat" })}
+            onClick={() => { setActiveTab("profile"); setView({ type: "chat" }); }}
             className="w-full flex items-center justify-center gap-2 text-gray-400 text-xs font-bold pt-4"
           >
             <Phone size={14} /> تواصل مع الدعم الفني
@@ -3732,7 +4244,7 @@ export default function App() {
         <div className={`bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center text-center space-y-2 ${user?.is_vip ? 'vip-card-glow border-amber-200' : ''}`}>
           <div className={`w-20 h-20 ${theme.bgLight} rounded-full flex items-center justify-center ${theme.icon} border-4 border-white shadow-lg overflow-hidden ${user?.is_vip ? 'vip-glow' : ''}`}>
             {user?.avatar_url ? (
-              <img src={user.avatar_url} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <img loading="lazy" src={user.avatar_url} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             ) : (
               <User size={40} />
             )}
@@ -3806,6 +4318,408 @@ export default function App() {
   };
 
 
+  const RewardsLeaderboardView = () => {
+    const [activeSection, setActiveSection] = useState<'rewards'|'leaderboard'>('rewards');
+    const [showAllRewards, setShowAllRewards] = useState(false);
+    const [leaderboardTab, setLeaderboardTab] = useState<'topup'|'referral'|'activity'>('topup');
+    const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
+    const [leaderboardLoading, setLeaderboardLoading] = useState(true);
+    const [showInfo, setShowInfo] = useState<string|null>(null);
+
+    useEffect(() => {
+      if (activeSection === 'leaderboard') {
+        setLeaderboardLoading(true);
+        setLeaderboardData([]);
+        fetch(`/api/leaderboard/${leaderboardTab}`)
+          .then(r => r.json())
+          .then(d => setLeaderboardData(Array.isArray(d) ? d : []))
+          .catch(() => setLeaderboardData([]))
+          .finally(() => setLeaderboardLoading(false));
+      }
+    }, [activeSection, leaderboardTab]);
+
+    const lbTabs = [
+      { key: 'topup', label: 'أكثر شحناً', icon: <Wallet size={16}/>, color: 'text-green-600', activeBg: 'bg-green-50 border-green-200', desc: 'ترتيب المستخدمين حسب إجمالي مبالغ الشحن.' },
+      { key: 'referral', label: 'أكثر إحالةً', icon: <Share2 size={16}/>, color: 'text-blue-600', activeBg: 'bg-blue-50 border-blue-200', desc: 'ترتيب المستخدمين حسب عدد الأصدقاء المدعوين.' },
+      { key: 'activity', label: 'الأكثر نشاطاً', icon: <Zap size={16}/>, color: 'text-amber-600', activeBg: 'bg-amber-50 border-amber-200', desc: 'ترتيب المستخدمين حسب إجمالي عدد الطلبات.' },
+    ] as const;
+
+    const activeLbTab = lbTabs.find(t => t.key === leaderboardTab)!;
+    const medalIcons = [
+      <div className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center"><Trophy size={14} className="text-amber-500"/></div>,
+      <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center"><Trophy size={14} className="text-gray-400"/></div>,
+      <div className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center"><Trophy size={14} className="text-orange-400"/></div>,
+    ];
+
+    return (
+      <div className="px-4 space-y-4 pb-20">
+        {/* Header */}
+        <div className="flex items-center gap-3 pt-2">
+          <button onClick={() => setView({ type: "main" })} className="p-2 bg-gray-100 rounded-xl text-gray-600 active:scale-90 transition-all">
+            <ArrowRight size={20} />
+          </button>
+          <h2 className="font-bold text-gray-800 text-lg">نظام المكافآت والترتيب</h2>
+        </div>
+
+        {/* زرا التبديل العلويان */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setActiveSection('rewards')}
+            className={`py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border transition-all active:scale-95 ${activeSection === 'rewards' ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-white border-gray-100 text-gray-400'}`}
+          >
+            <Star size={16} className={activeSection === 'rewards' ? 'text-amber-500' : 'text-gray-300'} />
+            نظام المكافآت
+          </button>
+          <button
+            onClick={() => setActiveSection('leaderboard')}
+            className={`py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 border transition-all active:scale-95 ${activeSection === 'leaderboard' ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-white border-gray-100 text-gray-400'}`}
+          >
+            <Trophy size={16} className={activeSection === 'leaderboard' ? 'text-amber-500' : 'text-gray-300'} />
+            الترتيب
+          </button>
+        </div>
+
+        {/* قسم نظام المكافآت */}
+        {activeSection === 'rewards' && user && user.stats && (
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Star size={18} className="text-amber-500" />
+                <h3 className="font-bold text-gray-800">نظام المكافآت</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold bg-amber-50 text-amber-600 px-2 py-1 rounded-lg">
+                  {user.stats.total_recharge_sum.toFixed(2)} $
+                </span>
+                <button onClick={() => setShowAllRewards(!showAllRewards)} className="p-1 hover:bg-gray-100 rounded-lg transition-colors text-gray-400">
+                  {showAllRewards ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-4">
+              {REWARD_GOALS.map((goal, index) => {
+                const isClaimed = user.stats!.claimed_reward_index >= index;
+                const isReached = user.stats!.total_recharge_sum >= goal.target;
+                const isCurrent = user.stats!.claimed_reward_index === index - 1;
+                const prevTarget = index === 0 ? 0 : REWARD_GOALS[index - 1].target;
+                const progress = Math.min(100, Math.max(0, ((user.stats!.total_recharge_sum - prevTarget) / (goal.target - prevTarget)) * 100));
+                if (!showAllRewards && !isCurrent) return null;
+                return (
+                  <div key={goal.id} className={`space-y-3 p-4 rounded-2xl border transition-all ${isClaimed ? 'bg-brand-light border-brand-soft' : isCurrent ? 'bg-amber-50 border-amber-100 shadow-sm' : 'bg-gray-50 border-gray-100 opacity-40'}`}>
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <div className={`w-9 h-9 shrink-0 rounded-xl flex items-center justify-center text-base ${isClaimed ? 'bg-brand/10' : isCurrent ? 'bg-amber-100' : 'bg-gray-100'}`}>
+                          {goal.icon}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm text-gray-800">{goal.title}</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5 leading-relaxed">{goal.rewardText}</p>
+                          {(goal as any).rewards?.discount && (
+                            <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                              🏷️ خصم {(goal as any).rewards.discount}% مدى الحياة
+                            </span>
+                          )}
+                          {isClaimed && (goal as any).rewards?.frame && (
+                            <span className="inline-flex items-center gap-1 mt-1 ml-1 text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">🖼️ إطار مفعّل</span>
+                          )}
+                          {isClaimed && (goal as any).rewards?.badge && (
+                            <span className="inline-flex items-center gap-1 mt-1 ml-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">🏅 شارة مفعّلة</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="shrink-0">
+                        {isClaimed ? (
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-brand whitespace-nowrap"><CheckCircle size={13} />تم</span>
+                        ) : isReached ? (
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await fetch("/api/rewards/claim", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("authToken") || ""}` }, body: JSON.stringify({ goalIndex: index }) });
+                                const resData = await res.json();
+                                if (res.ok) {
+                                  showToast("🎁 مبروك! تم استلام المكافأة بنجاح", 'success');
+                                  if (resData.stats) { setUser(prev => prev ? { ...prev, stats: resData.stats } : prev); }
+                                  fetchUser(user.id);
+                                } else { showToast(resData.error || "فشل استلام المكافأة", 'error'); }
+                              } catch { showToast("خطأ في الاتصال", 'error'); }
+                            }}
+                            className="bg-brand text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-sm active:scale-95 transition-all whitespace-nowrap"
+                          >استلام 🎁</button>
+                        ) : (
+                          <span className="text-[10px] font-bold text-amber-600 whitespace-nowrap">{(goal.target - user.stats!.total_recharge_sum).toFixed(0)} $ متبقي</span>
+                        )}
+                      </div>
+                    </div>
+                    {!isClaimed && (
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] text-gray-400">
+                          <span>{prevTarget} $</span><span>{goal.target} $</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div className={`h-full transition-all duration-500 ${isReached ? 'bg-brand' : 'bg-amber-400'}`} style={{ width: `${progress}%` }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* قسم الترتيب */}
+        {activeSection === 'leaderboard' && (
+          <>
+            {/* تبويبات الترتيب */}
+            <div className="grid grid-cols-3 gap-2">
+              {lbTabs.map(t => (
+                <div key={t.key} className="relative">
+                  <button onClick={() => { setLeaderboardTab(t.key); setShowInfo(null); }}
+                    className={`w-full p-3 rounded-2xl border text-center transition-all active:scale-95 ${leaderboardTab === t.key ? t.activeBg : 'bg-white border-gray-100'}`}>
+                    <div className={`flex justify-center mb-1 ${leaderboardTab === t.key ? t.color : 'text-gray-400'}`}>{t.icon}</div>
+                    <p className={`text-[10px] font-bold ${leaderboardTab === t.key ? t.color : 'text-gray-400'}`}>{t.label}</p>
+                  </button>
+                  <button
+                    onClick={() => setShowInfo(showInfo === t.key ? null : t.key)}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <HelpCircle size={11}/>
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {showInfo && (
+              <div className={`p-3 rounded-2xl border text-xs text-gray-600 leading-relaxed ${lbTabs.find(t=>t.key===showInfo)?.activeBg || 'bg-gray-50 border-gray-100'}`}>
+                <div className="flex items-start gap-2">
+                  <Info size={14} className="mt-0.5 shrink-0 text-gray-400"/>
+                  <p>{lbTabs.find(t => t.key === showInfo)?.desc}</p>
+                </div>
+              </div>
+            )}
+
+            {leaderboardLoading ? (
+              <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"/></div>
+            ) : leaderboardData.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                <Trophy size={40} className="mx-auto mb-3 opacity-20"/>
+                <p className="text-sm">لا توجد بيانات بعد</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {leaderboardData.map((entry: any, i: number) => (
+                  <div key={i} className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${
+                    i === 0 ? 'bg-amber-50 border-amber-200 shadow-sm' :
+                    i === 1 ? 'bg-gray-50 border-gray-200' :
+                    i === 2 ? 'bg-orange-50 border-orange-100' :
+                    'bg-white border-gray-100'
+                  }`}>
+                    <div className="w-7 shrink-0 flex justify-center">
+                      {i < 3 ? medalIcons[i] : <span className="text-xs font-black text-gray-400">#{i+1}</span>}
+                    </div>
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 overflow-hidden ${theme.bgLight}`}>
+                      {entry.avatar_url
+                        ? <img loading="lazy" src={entry.avatar_url} className="w-full h-full object-cover" referrerPolicy="no-referrer"/>
+                        : <User size={18} className={theme.icon}/>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm text-gray-800 truncate">{entry.name || 'مجهول'}</p>
+                      {entry.badge && (
+                        <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">{entry.badge}</span>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0 flex items-center gap-1">
+                      <div className={i < 3 ? activeLbTab.color : 'text-gray-400'}>{activeLbTab.icon}</div>
+                      <div>
+                        <p className={`font-black text-sm ${i < 3 ? activeLbTab.color : 'text-gray-700'}`}>{entry.value}</p>
+                        <p className="text-[9px] text-gray-400">{entry.unit}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {user && leaderboardData.length > 0 && (() => {
+              const myIdx = leaderboardData.findIndex((e:any) => String(e.user_id) === String(user.id));
+              return (
+                <div className={`rounded-2xl p-3 text-center border ${myIdx >= 0 ? 'bg-brand-light border-brand-soft' : 'bg-gray-50 border-gray-100'}`}>
+                  {myIdx >= 0
+                    ? <p className="text-xs font-bold text-brand">أنت في المركز #{myIdx + 1} 🎉</p>
+                    : <p className="text-xs text-gray-400">أنت لست في الترتيب حتى الآن · استمر!</p>
+                  }
+                </div>
+              );
+            })()}
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const LeaderboardView = () => {
+    const [tab, setTab] = useState<'topup'|'referral'|'activity'>('topup');
+    const [data, setData] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [showInfo, setShowInfo] = useState<string|null>(null);
+
+    useEffect(() => {
+      setLoading(true);
+      setData([]);
+      fetch(`/api/leaderboard/${tab}`)
+        .then(r => r.json())
+        .then(d => setData(Array.isArray(d) ? d : []))
+        .catch(() => setData([]))
+        .finally(() => setLoading(false));
+    }, [tab]);
+
+    const tabs = [
+      {
+        key: 'topup',
+        label: 'أكثر شحناً',
+        icon: <Wallet size={18}/>,
+        color: 'text-green-600',
+        activeBg: 'bg-green-50 border-green-200',
+        desc: 'ترتيب المستخدمين حسب إجمالي مبالغ الشحن التي أضافوها لحساباتهم منذ تسجيلهم وحتى الآن.'
+      },
+      {
+        key: 'referral',
+        label: 'أكثر إحالةً',
+        icon: <Share2 size={18}/>,
+        color: 'text-blue-600',
+        activeBg: 'bg-blue-50 border-blue-200',
+        desc: 'ترتيب المستخدمين حسب عدد الأصدقاء الذين دعوهم للمنصة عبر رابط الإحالة الخاص بهم.'
+      },
+      {
+        key: 'activity',
+        label: 'الأكثر نشاطاً',
+        icon: <Zap size={18}/>,
+        color: 'text-amber-600',
+        activeBg: 'bg-amber-50 border-amber-200',
+        desc: 'ترتيب المستخدمين حسب إجمالي عدد الطلبات التي أجروها في المتجر منذ انضمامهم.'
+      },
+    ] as const;
+
+    const medalIcons = [
+      <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center"><Trophy size={16} className="text-amber-500"/></div>,
+      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"><Trophy size={16} className="text-gray-400"/></div>,
+      <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center"><Trophy size={16} className="text-orange-400"/></div>,
+    ];
+
+    const activeTab = tabs.find(t => t.key === tab)!;
+
+    return (
+      <div className="px-4 space-y-4 pb-20">
+        {/* Header */}
+        <div className="flex items-center gap-3 pt-2">
+          <button onClick={() => setView({ type: 'main' })} className="p-2 bg-gray-100 rounded-xl text-gray-600 active:scale-90 transition-all">
+            <ArrowRight size={20} />
+          </button>
+          <div className="flex-1">
+            <h2 className="font-bold text-gray-800 text-lg flex items-center gap-2">
+              <Trophy size={20} className="text-amber-500" />لوحة الترتيب
+            </h2>
+            <p className="text-xs text-gray-400">ترتيب مدى الحياة · بدون جوائز</p>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="grid grid-cols-3 gap-2">
+          {tabs.map(t => (
+            <div key={t.key} className="relative">
+              <button onClick={() => { setTab(t.key); setShowInfo(null); }}
+                className={`w-full p-3 rounded-2xl border text-center transition-all active:scale-95 ${tab === t.key ? t.activeBg : 'bg-white border-gray-100'}`}>
+                <div className={`flex justify-center mb-1 ${tab === t.key ? t.color : 'text-gray-400'}`}>{t.icon}</div>
+                <p className={`text-[10px] font-bold ${tab === t.key ? t.color : 'text-gray-400'}`}>{t.label}</p>
+              </button>
+              <button
+                onClick={() => setShowInfo(showInfo === t.key ? null : t.key)}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <HelpCircle size={11}/>
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Info tooltip */}
+        {showInfo && (
+          <div className={`p-3 rounded-2xl border text-xs text-gray-600 leading-relaxed ${tabs.find(t=>t.key===showInfo)?.activeBg || 'bg-gray-50 border-gray-100'}`}>
+            <div className="flex items-start gap-2">
+              <Info size={14} className="mt-0.5 shrink-0 text-gray-400"/>
+              <p>{tabs.find(t => t.key === showInfo)?.desc}</p>
+            </div>
+          </div>
+        )}
+
+        {/* List */}
+        {loading ? (
+          <div className="flex justify-center py-12"><div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"/></div>
+        ) : data.length === 0 ? (
+          <div className="text-center py-12 text-gray-400">
+            <Trophy size={40} className="mx-auto mb-3 opacity-20"/>
+            <p className="text-sm">لا توجد بيانات بعد</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {data.map((entry: any, i: number) => (
+              <div key={i} className={`flex items-center gap-3 p-3 rounded-2xl border transition-all ${
+                i === 0 ? 'bg-amber-50 border-amber-200 shadow-sm' :
+                i === 1 ? 'bg-gray-50 border-gray-200' :
+                i === 2 ? 'bg-orange-50 border-orange-100' :
+                'bg-white border-gray-100'
+              }`}>
+                {/* Rank */}
+                <div className="w-8 shrink-0 flex justify-center">
+                  {i < 3
+                    ? medalIcons[i]
+                    : <span className="text-xs font-black text-gray-400">#{i+1}</span>
+                  }
+                </div>
+                {/* Avatar */}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden ${theme.bgLight}`}>
+                  {entry.avatar_url
+                    ? <img loading="lazy" src={entry.avatar_url} className="w-full h-full object-cover" referrerPolicy="no-referrer"/>
+                    : <User size={20} className={theme.icon}/>}
+                </div>
+                {/* Name */}
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-sm text-gray-800 truncate">{entry.name || 'مجهول'}</p>
+                  {entry.badge && (
+                    <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">{entry.badge}</span>
+                  )}
+                </div>
+                {/* Value */}
+                <div className="text-right shrink-0 flex items-center gap-1">
+                  <div className={i < 3 ? activeTab.color : 'text-gray-400'}>
+                    {activeTab.icon}
+                  </div>
+                  <div>
+                    <p className={`font-black text-sm ${i < 3 ? activeTab.color : 'text-gray-700'}`}>{entry.value}</p>
+                    <p className="text-[9px] text-gray-400">{entry.unit}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Current user position */}
+        {user && data.length > 0 && (() => {
+          const myIdx = data.findIndex((e:any) => String(e.user_id) === String(user.id));
+          return (
+            <div className={`rounded-2xl p-3 text-center border ${myIdx >= 0 ? 'bg-brand-light border-brand-soft' : 'bg-gray-50 border-gray-100'}`}>
+              {myIdx >= 0
+                ? <p className="text-xs font-bold text-brand">أنت في المركز #{myIdx + 1} 🎉</p>
+                : <p className="text-xs text-gray-400">أنت لست في الترتيب حتى الآن · استمر!</p>
+              }
+            </div>
+          );
+        })()}
+      </div>
+    );
+  };
+
   const EditProfileView = () => {
     const [name, setName] = useState(user?.name || "");
     const [email, setEmail] = useState(user?.email || "");
@@ -3813,6 +4727,30 @@ export default function App() {
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [avatarUploading, setAvatarUploading] = useState(false);
+
+    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setAvatarUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append("image", file);
+        const imgbbKey = (import.meta as any).env.VITE_IMGBB_API_KEY || "97ffbf56fe1a203445531d664cd4b928";
+        const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbKey}`, { method: "POST", body: formData });
+        const data = await res.json();
+        if (data.success) {
+          const token = localStorage.getItem("authToken") || "";
+          const updateRes = await fetch(`/api/user/${user?.id}/avatar`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+            body: JSON.stringify({ avatar_url: data.data.url })
+          });
+          if (updateRes.ok) { fetchUser(user!.id); showToast("✅ تم تحديث الصورة الشخصية بنجاح", 'success'); }
+          else { showToast("فشل تحديث الصورة", 'error'); }
+        } else { showToast("فشل رفع الصورة", 'error'); }
+      } catch { showToast("فشل رفع الصورة", 'error'); } finally { setAvatarUploading(false); }
+    };
 
     const handleUpdate = async () => {
       if (!user) return;
@@ -3826,7 +4764,6 @@ export default function App() {
         });
         const data = await res.json();
         if (res.ok) {
-          // reload full user object to avoid partial data crash
           await fetchUser(user!.id);
           setView({ type: "success", data: "تم تحديث المعلومات بنجاح" });
         } else {
@@ -3845,39 +4782,60 @@ export default function App() {
           <button onClick={() => setView({ type: "main" })} className="p-2 bg-gray-100 rounded-full">
             <ArrowRight size={20} className="text-gray-600" />
           </button>
-          <h2 className="text-xl font-bold text-gray-800">تعديل المعلومات الشخصية</h2>
+          <h2 className="text-xl font-bold text-gray-800">تعديل الملف الشخصي</h2>
+        </div>
+
+        {/* صورة الحساب مع زر التغيير */}
+        <div className="flex flex-col items-center gap-3">
+          <div className="relative">
+            <div className={`w-24 h-24 ${theme.bgLight} rounded-full flex items-center justify-center ${theme.icon} border-4 border-white shadow-lg overflow-hidden`}>
+              {user?.avatar_url ? (
+                <img loading="lazy" src={user.avatar_url} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              ) : <User size={48} />}
+              {avatarUploading && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-full">
+                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              )}
+            </div>
+            <label className="absolute bottom-0 right-0 bg-brand text-white p-2 rounded-full cursor-pointer shadow-lg hover:opacity-90 transition-colors">
+              <Plus size={16} />
+              <input type="file" className="hidden" accept="image/*" onChange={handleAvatarUpload} disabled={avatarUploading} />
+            </label>
+          </div>
+          <p className="text-xs text-gray-400">اضغط على + لتغيير الصورة</p>
         </div>
 
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700">الاسم الكامل</label>
-                <input 
-                  type="text" value={name} onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700">البريد الإلكتروني</label>
-                <input 
-                  type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700">رقم الهاتف</label>
-                <input 
-                  type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
-                  className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700">كلمة المرور الجديدة (اختياري)</label>
-                <input 
-                  type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                  placeholder="اتركها فارغة إذا لم ترد التغيير"
-                  className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand"
-                />
-              </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-gray-700">الاسم الكامل</label>
+            <input 
+              type="text" value={name} onChange={(e) => setName(e.target.value)}
+              className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-gray-700">البريد الإلكتروني</label>
+            <input 
+              type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-gray-700">رقم الهاتف</label>
+            <input 
+              type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+              className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-gray-700">تغيير كلمة المرور (اختياري)</label>
+            <input 
+              type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+              placeholder="اتركها فارغة إذا لم ترد التغيير"
+              className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 outline-none focus:border-brand"
+            />
+          </div>
 
           {error && <p className="text-red-500 text-sm text-center font-medium">{error}</p>}
 
@@ -3903,7 +4861,7 @@ export default function App() {
               }}
               className="w-full bg-gray-100 text-gray-700 py-3 rounded-xl font-bold text-sm"
             >
-              تحميل بيانات الحساب (نسخة احتياطية)
+              تنزيل نسخة من بياناتي
             </button>
           </div>
         </div>
@@ -3930,7 +4888,7 @@ export default function App() {
 
     const copyLink = () => {
       navigator.clipboard.writeText(referralLink);
-      alert("تم نسخ رابط الإحالة");
+      showToast("تم نسخ رابط الإحالة", 'success');
     };
 
     return (
@@ -4040,7 +4998,28 @@ export default function App() {
     useEffect(() => {
       fetchMessages();
       fetchFaqs();
-      const interval = setInterval(fetchMessages, 30000);
+      // تحديث ذكي: نتحقق فقط من وجود رسائل جديدة بشكل خفيف كل 8 ثواني
+      // وإذا وجدنا جديداً نحدث، وإلا نتجاهل بدون إعادة رسم
+      const interval = setInterval(async () => {
+        try {
+          const token = localStorage.getItem("authToken") || "";
+          const guestId = localStorage.getItem("guest_id") || "";
+          const url = user
+            ? `/api/chat/messages?user_id=${user.id}`
+            : `/api/chat/messages?guest_id=${guestId}`;
+          const res = await fetch(url, {
+            headers: user && token ? { Authorization: `Bearer ${token}` } : {}
+          });
+          if (!res.ok) return;
+          const raw = await res.json();
+          const data = Array.isArray(raw) ? raw : [];
+          // نحدث الحالة فقط إذا كان هناك رسائل جديدة فعلاً
+          setMessages(prev => {
+            if (prev.length === data.length && prev.every((m, i) => m.id === data[i]?.id)) return prev;
+            return data;
+          });
+        } catch {}
+      }, 8000);
       return () => clearInterval(interval);
     }, []);
 
@@ -4082,10 +5061,10 @@ export default function App() {
           fetchMessages();
         } else {
           const data = await res.json();
-          alert(data.error || "فشل الإرسال");
+          showToast(data.error || "فشل الإرسال", 'error');
         }
       } catch (e) {
-        alert("خطأ في الاتصال");
+        showToast("خطأ في الاتصال", 'error');
       } finally {
         setSending(false);
       }
@@ -4143,15 +5122,15 @@ export default function App() {
           setSelectedFile(null);
         }
       } catch (err) {
-        alert("فشل رفع الصورة");
+        showToast("فشل رفع الصورة", 'error');
       } finally {
         setUploading(false);
       }
     };
 
     return (
-      <div className="fixed inset-0 z-[60] bg-gray-50 flex flex-col bottom-16">
-        <div className="bg-white p-4 border-b border-gray-100 flex items-center gap-3 shadow-sm">
+      <div className="fixed inset-0 z-[60] bg-gray-50 flex flex-col" style={{top:0, bottom:'64px'}}>
+        <div className="bg-white p-4 border-b border-gray-100 flex items-center gap-3 shadow-sm shrink-0">
           <button onClick={() => setView({ type: "main" })} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors">
             <ArrowRight size={20} className="text-gray-600" />
           </button>
@@ -4188,7 +5167,7 @@ export default function App() {
                     </div>
                   )}
                   {m.image_url && (
-                    <img src={m.image_url} alt="Chat" className="rounded-lg mb-2 max-w-full border border-gray-100" referrerPolicy="no-referrer" />
+                    <img loading="lazy" src={m.image_url} alt="Chat" className="rounded-lg mb-2 max-w-full border border-gray-100" referrerPolicy="no-referrer" />
                   )}
                   {m.type === 'rating_request' ? (
                     <div className="text-center py-2">
@@ -4232,7 +5211,7 @@ export default function App() {
           </AnimatePresence>
         </div>
 
-        <div className="p-4 bg-white border-t border-gray-100 flex items-center gap-2 shrink-0">
+        <div className="relative p-4 bg-white border-t border-gray-100 flex items-center gap-2 shrink-0 mt-auto">
           {/* FAQ Panel */}
           {showFaqs && faqs.length > 0 && (
             <div className="absolute bottom-full left-4 right-4 mb-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
@@ -4266,7 +5245,7 @@ export default function App() {
                     <X size={20} />
                   </button>
                 </div>
-                <img src={imagePreview} alt="Preview" className="w-full h-64 object-contain rounded-xl mb-4 bg-gray-50" />
+                <img loading="lazy" src={imagePreview} alt="Preview" className="w-full h-64 object-contain rounded-xl mb-4 bg-gray-50" />
                 <button 
                   onClick={confirmAndSendImage}
                   disabled={uploading}
@@ -4391,29 +5370,35 @@ export default function App() {
           fetchMessages(selectedChatUser.id, selectedChatUser.is_guest);
         }
       } catch (e) {
-        alert("فشل الإرسال");
+        showToast("فشل الإرسال", 'error');
       }
     };
 
     const handleToggleBlock = async (userId: number, currentBlocked: boolean) => {
-      if (!confirm(`هل تريد ${currentBlocked ? 'إلغاء حظر' : 'حظر'} هذا المستخدم من الدردشة؟`)) return;
-      const res = await adminFetch("/api/admin/chat/block", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, blocked: !currentBlocked })
-      });
-      if (res.ok) {
-        if (selectedChatUser?.id === userId) {
-          setSelectedChatUser({ ...selectedChatUser, chat_blocked: !currentBlocked });
-        }
-        fetchChatList();
-      }
+      showConfirm(
+        `هل تريد ${currentBlocked ? 'إلغاء حظر' : 'حظر'} هذا المستخدم من الدردشة؟`,
+        currentBlocked ? 'إلغاء الحظر' : 'حظر المستخدم',
+        async () => {
+          const res = await adminFetch("/api/admin/chat/block", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId, blocked: !currentBlocked })
+          });
+          if (res.ok) {
+            if (selectedChatUser?.id === userId) {
+              setSelectedChatUser({ ...selectedChatUser, chat_blocked: !currentBlocked });
+            }
+            fetchChatList();
+          }
+        },
+        false
+      );
     };
 
     const handleAddAutoReply = async () => {
       const trigger = triggerRef.current?.value?.trim() || "";
       const replyText = replyRef.current?.value?.trim() || "";
-      if (!trigger || !replyText) return alert("يرجى إدخال النص والرد");
+      if (!trigger || !replyText) return showToast("يرجى إدخال النص والرد", 'error');
       const res = await adminFetch("/api/admin/auto-replies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -4426,16 +5411,29 @@ export default function App() {
         fetchAutoReplies();
         // إرسال الرد فوراً للمستخدم الحالي إن وجد
         if (selectedChatUser) handleSendReply(replyText);
-        alert("✅ تم حفظ الرد التلقائي وإرساله");
+        showToast("✅ تم حفظ الرد التلقائي وإرساله", 'success');
       } else {
-        alert("❌ فشل الحفظ");
+        showToast("❌ فشل الحفظ", 'error');
       }
     };
 
     const handleDeleteAutoReply = async (id: number) => {
-      if (!confirm("هل تريد حذف هذا الرد التلقائي؟")) return;
-      const res = await adminFetch(`/api/admin/auto-replies/${id}`, { method: "DELETE" });
-      if (res.ok) fetchAutoReplies();
+      showConfirm("هل تريد حذف هذا الرد التلقائي؟", "حذف الرد التلقائي", async () => {
+        try {
+          const res = await adminFetch(`/api/admin/auto-replies/${id}`, {
+            method: "DELETE",
+            headers: { "x-admin-token": localStorage.getItem("adminToken") || "" }
+          });
+          if (res.ok) {
+            setAutoReplies(prev => prev.filter((r: any) => r.id !== id));
+            showToast("✅ تم حذف الرد التلقائي", 'success');
+          } else {
+            showToast("❌ فشل حذف الرد التلقائي", 'error');
+          }
+        } catch (e) {
+          showToast("❌ فشل الاتصال بالخادم", 'error');
+        }
+      }, true);
     };
 
     if (selectedChatUser) {
@@ -4448,7 +5446,7 @@ export default function App() {
               </button>
               <div className="w-10 h-10 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
                 {selectedChatUser.avatar_url ? (
-                  <img src={selectedChatUser.avatar_url} alt="" className="w-full h-full object-cover" />
+                  <img loading="lazy" src={selectedChatUser.avatar_url} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-gray-400"><User size={20} /></div>
                 )}
@@ -4489,7 +5487,7 @@ export default function App() {
                   <div className={`max-w-[85%] p-3 rounded-2xl shadow-sm relative ${
                     m.sender_role === 'admin' ? 'bg-[var(--brand)] text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none'
                   }`}>
-                    {m.image_url && <img src={m.image_url} alt="" className="rounded-lg mb-2 max-w-full border border-gray-100" referrerPolicy="no-referrer" />}
+                    {m.image_url && <img loading="lazy" src={m.image_url} alt="" className="rounded-lg mb-2 max-w-full border border-gray-100" referrerPolicy="no-referrer" />}
                     {m.content && <p className="text-sm font-medium leading-relaxed">{m.content}</p>}
                     <p className={`text-[8px] mt-1 ${m.sender_role === 'admin' ? 'text-white/70' : 'text-gray-400'}`}>
                       {new Date(m.created_at).toLocaleString("ar-EG", { hour: '2-digit', minute: '2-digit' })}
@@ -4615,14 +5613,16 @@ export default function App() {
               onClick={() => setSelectedChatUser(chat)}
               className={`p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 text-right transition-all active:scale-[0.98] ${chat.is_guest ? 'bg-red-50 border-red-100' : 'bg-white'}`}
             >
-              <div className="w-12 h-12 bg-gray-50 rounded-full overflow-hidden relative border border-gray-100">
-                {chat.avatar_url ? (
-                  <img src={chat.avatar_url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400"><User size={24} /></div>
-                )}
+              <div className="relative w-12 h-12 shrink-0">
+                <div className="w-12 h-12 bg-gray-50 rounded-full overflow-hidden border border-gray-100">
+                  {chat.avatar_url ? (
+                    <img loading="lazy" src={chat.avatar_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400"><User size={24} /></div>
+                  )}
+                </div>
                 {chat.unread_count > 0 && (
-                  <div className="absolute -top-1 -right-1 w-5 h-5 bg-brand text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
+                  <div className="absolute -top-1 -right-1 w-5 h-5 bg-brand text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white z-10">
                     {chat.unread_count}
                   </div>
                 )}
@@ -4701,21 +5701,23 @@ export default function App() {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-50 overflow-hidden">
+        {/* تفعيل الإشعارات */}
         <div className="p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Bell size={20} className="text-gray-400" />
             <span className="font-medium text-gray-700">الإشعارات</span>
           </div>
           <button 
-            onClick={() => alert("تم تفعيل الإشعارات بنجاح!")}
+            onClick={() => showToast("تم تفعيل الإشعارات بنجاح!", 'success')}
             className="w-10 h-5 bg-brand rounded-full relative"
           >
             <div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full"></div>
           </button>
         </div>
+        {/* الوضع الليلي */}
         <div className="p-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <ImageIcon size={20} className="text-gray-400" />
+            <Moon size={20} className="text-gray-400" />
             <span className="font-medium text-gray-700">الوضع الليلي</span>
           </div>
           <button 
@@ -4725,6 +5727,34 @@ export default function App() {
             <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${isDarkMode ? 'right-1' : 'left-1'}`}></div>
           </button>
         </div>
+        {/* سياسة الخصوصية */}
+        <button onClick={() => setView({ type: "privacy_policy" })} className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+          <div className="flex items-center gap-3">
+            <Shield size={20} className="text-gray-400" />
+            <span className="font-medium text-gray-700">سياسة الخصوصية</span>
+          </div>
+          <ChevronRight size={18} className="text-gray-300" />
+        </button>
+        {/* أولوية الدعم - تظهر فقط إن كان يملكها */}
+        {!!user?.stats?.has_special_support && (
+          <button onClick={() => showToast("لديك أولوية في الدعم الفني. تواصل معنا عبر الواتساب.", 'info')} className="w-full p-4 flex items-center justify-between hover:bg-amber-50 transition-colors">
+            <div className="flex items-center gap-3">
+              <ShieldCheck size={20} className="text-amber-500" />
+              <span className="font-medium text-amber-600">أولوية الدعم</span>
+            </div>
+            <ChevronRight size={18} className="text-amber-300" />
+          </button>
+        )}
+        {/* تخصيص الثيم - تظهر فقط إن كان يملكها */}
+        {!!user?.stats?.custom_theme_color && (
+          <button onClick={() => setThemeModal({ isOpen: true, color: user.stats.custom_theme_color === 'any' ? '#10b981' : user.stats.custom_theme_color })} className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+            <div className="flex items-center gap-3">
+              <Palette size={20} className="text-brand" />
+              <span className="font-medium text-brand">تخصيص الثيم</span>
+            </div>
+            <ChevronRight size={18} className="text-gray-300" />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -5005,14 +6035,14 @@ export default function App() {
                       const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbKey}`, { method: "POST", body: formData });
                       const data = await res.json();
                       if (data.success) setGlobalImageUrl(data.data.url);
-                      else alert("فشل رفع الصورة");
-                    } catch { alert("خطأ في رفع الصورة"); }
+                      else showToast("فشل رفع الصورة", 'error');
+                    } catch { showToast("خطأ في رفع الصورة", 'error'); }
                   }}/>
                 </label>
               </div>
               {globalImageUrl && (
                 <div className="mt-2 flex items-center gap-2">
-                  <img src={globalImageUrl} className="w-12 h-12 object-cover rounded-lg border border-gray-100" referrerPolicy="no-referrer"/>
+                  <img loading="lazy" src={globalImageUrl} className="w-12 h-12 object-cover rounded-lg border border-gray-100" referrerPolicy="no-referrer"/>
                   <button onClick={() => setGlobalImageUrl("")} className="text-xs text-red-500 bg-red-50 px-2 py-1 rounded-lg">حذف</button>
                 </div>
               )}
@@ -5072,11 +6102,6 @@ export default function App() {
                         <span className="text-[10px] text-gray-400">{p.category_name}</span>
                         <span className="text-[10px] font-bold text-[var(--brand)]">{p.price} $</span>
                         {p.id && <span className="text-[9px] text-gray-300">#{p.id}</span>}
-                        {p.qty_values && (
-  <span className="text-[9px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded-full font-bold">
-    {p.qty_values.min}–{p.qty_values.max}
-  </span>
-)}
                       </div>
                     </div>
                   </div>
@@ -5102,7 +6127,7 @@ export default function App() {
 
           <button
             onClick={async () => {
-              if (!targetSubcategoryId) return alert("اختر القسم الفرعي أولاً");
+              if (!targetSubcategoryId) return showToast("اختر القسم الفرعي أولاً", 'info');
               setSyncLoading(true); setSyncResult(null);
               try {
                 const res = await adminFetch("/api/admin/ahminix/sync", { method:"POST", headers:{"Content-Type":"application/json"},
@@ -5230,7 +6255,7 @@ const AdminUserCard = ({ u, fetchAdminUsers, handleToggleVip, handleBlockUser, h
       {/* Header Row */}
       <div className="p-4 flex items-center gap-3">
         <div className="w-11 h-11 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden shrink-0 border-2 border-white shadow">
-          {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover" referrerPolicy="no-referrer"/> : <User size={20} className="text-gray-400"/>}
+          {u.avatar_url ? <img loading="lazy" src={u.avatar_url} className="w-full h-full object-cover" referrerPolicy="no-referrer"/> : <User size={20} className="text-gray-400"/>}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
@@ -5363,7 +6388,7 @@ const AdminUserCard = ({ u, fetchAdminUsers, handleToggleVip, handleBlockUser, h
 };
 
 // ===================== ADMIN STATS TAB =====================
-const AdminStatsTab = ({ adminFetch }: { adminFetch: (url: string, options?: RequestInit) => Promise<Response> }) => {
+const AdminStatsTab = ({ adminFetch }: { adminFetch: any }) => {
   const [filter, setFilter] = React.useState<"daily"|"weekly"|"monthly"|"custom">("monthly");
   const [customFrom, setCustomFrom] = React.useState("");
   const [customTo, setCustomTo] = React.useState("");
@@ -5386,13 +6411,13 @@ const AdminStatsTab = ({ adminFetch }: { adminFetch: (url: string, options?: Req
 
   const handleReset = async () => {
     const res = await adminFetch("/api/admin/analytics/reset", { method: "POST", headers: {"Content-Type":"application/json"} });
-    if (res.ok) { alert("✅ تم تصفير الأرباح"); fetchStats(); }
+    if (res.ok) { showToast("✅ تم تصفير الأرباح", 'success'); fetchStats(); }
     setShowResetConfirm(false);
   };
 
   React.useEffect(() => { fetchStats(); }, [filter]);
 
-  const stats = data || { accepted_orders: 0, rejected_orders: 0, total_payments: 0, gross_revenue: 0, api_cost: 0, profit: 0, profit_margin: 0 };
+  const stats = data || { accepted_orders: 0, rejected_orders: 0, total_payments: 0, gross_revenue: 0, api_cost: 0, profit: 0, profit_margin: 0, net_margin: 0, orders_with_cost: 0, orders_without_cost: 0 };
 
   return (
     <div className="space-y-4">
@@ -5478,57 +6503,32 @@ const AdminStatsTab = ({ adminFetch }: { adminFetch: (url: string, options?: Req
                 <p className="font-bold text-amber-800">صافي الأرباح</p>
               </div>
               <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">
-                معدل: {stats.profit_margin?.toFixed(1)}%
+                ربح: {stats.profit_margin?.toFixed(1)}% | هامش: {stats.net_margin?.toFixed(1)}%
               </span>
             </div>
-            <p className="text-3xl font-black text-amber-700">{stats.profit?.toFixed(2)} $</p>
+            <p className={`text-3xl font-black ${(stats.profit || 0) >= 0 ? "text-amber-700" : "text-red-600"}`}>
+              {(stats.profit || 0) >= 0 ? "+" : ""}{(stats.profit || 0).toFixed(2)} $
+            </p>
             <div className="mt-3 bg-white/60 rounded-xl p-3 space-y-1.5">
               <div className="flex justify-between text-[11px]">
-                <span className="text-gray-500">إجمالي المبيعات</span>
-                <span className="font-bold text-gray-700">{stats.gross_revenue?.toFixed(4)} $</span>
+                <span className="text-gray-500">سعر البيع (إيرادات)</span>
+                <span className="font-bold text-green-600">+ {(stats.gross_revenue || 0).toFixed(2)} $</span>
               </div>
               <div className="flex justify-between text-[11px]">
                 <span className="text-gray-500">تكلفة API (سعر الشراء)</span>
-                <span className="font-bold text-red-500">- {stats.api_cost?.toFixed(4)} $</span>
+                <span className="font-bold text-red-500">- {(stats.api_cost || 0).toFixed(2)} ${stats.orders_without_cost > 0 && stats.orders_with_cost === 0 ? " ⚠️" : ""}</span>
               </div>
-              <div className="border-t border-amber-100 pt-2 flex justify-between text-[11px]">
+              <div className="border-t border-gray-200 pt-1.5 flex justify-between text-[11px]">
                 <span className="font-bold text-gray-700">صافي الربح</span>
-                <span className={`font-black ${(stats.profit||0) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                  {stats.profit?.toFixed(4)} $
+                <span className={`font-black ${(stats.profit || 0) >= 0 ? "text-green-600" : "text-red-600"}`}>
+                  {(stats.profit || 0) >= 0 ? "+" : ""}{(stats.profit || 0).toFixed(2)} $
                 </span>
               </div>
-            </div>
-          </div>
-
-          {/* API Details Card */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm space-y-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Zap size={15} className="text-blue-500"/>
-              <p className="font-bold text-gray-800 text-sm">تفاصيل أرباح API</p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
-                <p className="text-[9px] text-blue-500 font-bold mb-1">عدد طلبات API المكتملة</p>
-                <p className="text-xl font-black text-blue-700">{stats.accepted_orders}</p>
-              </div>
-              <div className="bg-green-50 rounded-xl p-3 border border-green-100">
-                <p className="text-[9px] text-green-600 font-bold mb-1">متوسط الربح / طلب</p>
-                <p className="text-xl font-black text-green-700">
-                  {stats.accepted_orders > 0 ? ((stats.profit||0) / stats.accepted_orders).toFixed(4) : '0.0000'} $
+              {(stats.orders_without_cost > 0) && (
+                <p className="text-[9px] text-amber-600 bg-amber-50 rounded-lg px-2 py-1 mt-1">
+                  ⚠️ {stats.orders_without_cost} طلب بدون سعر تكلفة (price_per_unit = 0) — تحقق من إعداد المنتجات
                 </p>
-              </div>
-              <div className="bg-purple-50 rounded-xl p-3 border border-purple-100 col-span-2">
-                <p className="text-[9px] text-purple-600 font-bold mb-1">هامش الربح الإجمالي</p>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-purple-500 h-2 rounded-full transition-all"
-                      style={{width: `${Math.min(Math.max(stats.profit_margin||0, 0), 100)}%`}}
-                    />
-                  </div>
-                  <span className="font-black text-purple-700 text-sm">{stats.profit_margin?.toFixed(1)}%</span>
-                </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -5692,12 +6692,12 @@ const AdminHomeTab = ({adminUsers, adminOrders, adminTransactions, setAdminTab, 
   );
 };
 
-const AdminOrdersTab = ({adminOrders, orderSearch, setOrderSearch, orderDateFilter, setOrderDateFilter, fetchAdminOrders, adminFetch, overridePlayerIds, setOverridePlayerIds}: any) => {
+const AdminOrdersTab = ({adminOrders, orderSearch, setOrderSearch, orderDateFilter, setOrderDateFilter, fetchAdminOrders, adminFetch}: any) => {
   const [orderMode, setOrderMode] = React.useState<string>("manual");
   const [modeLoading, setModeLoading] = React.useState(false);
   const [modeLoaded, setModeLoaded] = React.useState(false);
-  const [expandedOrders, setExpandedOrders] = React.useState<Set<number>>(new Set());
-  const [actionLoading, setActionLoading] = React.useState<number | null>(null);
+  const [expandedOrderId, setExpandedOrderId] = React.useState<number|null>(null);
+  const [overridePlayerIds, setOverridePlayerIds] = React.useState<Record<number, string>>({});
   React.useEffect(() => {
   fetch("/api/settings").then(r => r.json()).then((data: any[]) => {
   const s = data.find((x: any) => x.key === "order_processing_mode");
@@ -5711,29 +6711,28 @@ const AdminOrdersTab = ({adminOrders, orderSearch, setOrderSearch, orderDateFilt
   setOrderMode(newMode);
   setModeLoading(false);
   };
-  const toggleExpand = (orderId: number) => {
-    setExpandedOrders(prev => {
-      const next = new Set(prev);
-      next.has(orderId) ? next.delete(orderId) : next.add(orderId);
-      return next;
-    });
-  };
-  const handleOrderAction = async (orderId: number, action: "approved" | "rejected", adminResp?: string, overridePlayerId?: string) => {
-    setActionLoading(orderId);
-    try {
-      const body: any = { status: action, admin_response: adminResp || "" };
-      if (overridePlayerId && overridePlayerId.trim() !== "") body.override_player_id = overridePlayerId.trim();
-      const res = await adminFetch(`/api/admin/orders/${orderId}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        alert(`❌ ${data.error || "حدث خطأ غير متوقع"}`);
-      } else {
-        fetchAdminOrders();
-      }
-    } catch (e: any) {
-      alert(`❌ فشل الاتصال: ${e.message}`);
+  const handleOrderAction = async (orderId: number, action: "approved" | "rejected", adminResp?: string) => {
+  const overrideId = overridePlayerIds[orderId]?.trim() || undefined;
+  const body: any = { status: action, admin_response: adminResp || "" };
+  if (action === "approved" && overrideId) body.override_player_id = overrideId;
+  const res = await adminFetch(`/api/admin/orders/${orderId}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  if (!res.ok) {
+    // خطأ حقيقي في السيرفر (ليس خطأ API)
+    showToast(data.error || "حدث خطأ في السيرفر", 'error');
+    fetchAdminOrders();
+    return;
+  }
+  if (action === "approved") {
+    if (data.finalStatus === "completed") {
+      showToast("✅ تم التنفيذ بنجاح", 'success');
+    } else if (data.apiError) {
+      showToast(`⏳ تم إرسال الطلب — قيد المعالجة\n\nملاحظة: ${data.apiError}`, 'success');
+    } else {
+      showToast("⏳ تم الإرسال — قيد المعالجة", 'success');
     }
-    setActionLoading(null);
+  }
+  fetchAdminOrders();
   };
   const pendingAdminOrders = adminOrders.filter(o => o.status === 'pending_admin');
   const filteredOrders = adminOrders.filter(o => !orderSearch || o.product_name?.includes(orderSearch) || String(o.id).includes(orderSearch) || o.user_name?.includes(orderSearch));
@@ -5763,53 +6762,66 @@ const AdminOrdersTab = ({adminOrders, orderSearch, setOrderSearch, orderDateFilt
         {pendingAdminOrders.map(order => {
           let metaParsed: any = {};
           try { metaParsed = JSON.parse(order.meta || "{}"); } catch {}
-          const isLoading = actionLoading === order.id;
-          const storedPlayerId = metaParsed.playerId || metaParsed.input || metaParsed.userId || metaParsed.gameId || metaParsed.accountId || "";
-          const storeTypeP = order.order_items?.[0]?.products?.store_type;
+          const savedPlayerId = metaParsed.playerId || metaParsed.input || metaParsed.player_id || "";
+          const lastError = metaParsed.last_api_error || "";
+          const productExtId = order.order_items?.[0]?.products?.external_id || "";
+          const qty = order.order_items?.[0]?.quantity || 1;
+          const currentOverride = overridePlayerIds[order.id];
+          // إذا لم يعدّل الأدمن الحقل، نستخدم savedPlayerId تلقائياً
+          const effectivePlayerId = (currentOverride !== undefined ? currentOverride : savedPlayerId).trim();
           return (
             <div key={order.id} className="border border-amber-100 rounded-xl bg-amber-50/40 p-4 space-y-3">
-              {/* معلومات المستخدم */}
-              <div className="flex items-center gap-2">
-                {order.user_avatar ? (
-                  <img src={order.user_avatar} className="w-9 h-9 rounded-full object-cover border-2 border-amber-200 shrink-0" referrerPolicy="no-referrer"/>
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                    <span className="text-amber-700 font-bold text-xs">{(order.user_name||'?')[0]}</span>
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-sm text-gray-800">{order.user_name}</p>
-                  {(order.user_email || order.users?.email) && <p className="text-[10px] text-gray-400 truncate">{order.user_email || order.users?.email}</p>}
-                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                    {order.user_login_id && <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-md font-mono">#{order.user_login_id}</span>}
-                    {(order.user_phone || order.users?.phone) && <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md">{order.user_phone || order.users?.phone}</span>}
-                  </div>
-                </div>
-              </div>
-              {/* تفاصيل الطلب */}
-              <div className="border-t border-amber-100 pt-2">
+              <div>
                 <p className="font-bold text-sm text-[var(--brand)]">#{order.id} - {order.product_name}</p>
-                <p className="text-xs text-gray-500">{(order.total_amount || 0).toFixed(2)} $</p>
-                {storedPlayerId && <p className="text-xs text-gray-600 mt-1">🎮 Player ID المُخزّن: <span className="font-mono font-bold text-gray-800">{storedPlayerId}</span></p>}
+                <p className="text-xs text-gray-500">{order.user_name} · {(order.total_amount || order.total_price || 0).toFixed(2)} $</p>
+                {productExtId && (
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    <span className="font-bold">Product ID: </span><span className="font-mono">{productExtId}</span>
+                    {qty > 1 && <span className="font-bold ml-2">الكمية: {qty}</span>}
+                  </p>
+                )}
+                {savedPlayerId && (
+                  <p className="text-xs text-gray-600 mt-1 font-mono break-all">
+                    <span className="font-bold text-gray-500">Player ID: </span>{savedPlayerId}
+                  </p>
+                )}
+                {lastError && (
+                  <p className="text-xs text-red-500 mt-1 bg-red-50 rounded-lg px-2 py-1">⚠️ {lastError}</p>
+                )}
               </div>
-              {/* تغيير Player ID إذا كان API خارجي */}
-              {storeTypeP === 'external_api' && (
-                <div>
-                  <p className="text-[9px] text-gray-400 font-bold mb-1">تصحيح Player ID (اختياري)</p>
-                  <input
-                    type="text"
-                    placeholder={storedPlayerId || "Player ID..."}
-                    value={overridePlayerIds[order.id] ?? ''}
-                    onChange={e => setOverridePlayerIds(prev => ({...prev, [order.id]: e.target.value}))}
-                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-[var(--brand)] font-mono"
-                  />
-                </div>
-              )}
+              <div>
+                <p className="text-[10px] text-gray-400 mb-1">تعديل Player ID قبل القبول (اختياري)</p>
+                <input
+                  type="text"
+                  placeholder={savedPlayerId || "أدخل Player ID..."}
+                  value={currentOverride !== undefined ? currentOverride : savedPlayerId}
+                  onChange={e => setOverridePlayerIds(prev => ({ ...prev, [order.id]: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs outline-none focus:border-[var(--brand)] font-mono"
+                />
+              </div>
               <div className="flex gap-2">
-                <button disabled={isLoading} onClick={() => handleOrderAction(order.id, "approved", undefined, overridePlayerIds[order.id])} className="flex-1 bg-green-500 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60">
-                  {isLoading ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"/> : <CheckCircle size={12}/>}قبول وإرسال
-                </button>
-                <button disabled={isLoading} onClick={() => { const r = prompt("سبب الرفض:"); if (r !== null) handleOrderAction(order.id, "rejected", r || ""); }} className="flex-1 bg-red-100 text-red-600 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"><XCircle size={12}/>رفض</button>
+                <button
+                  onClick={() => {
+                    const body: any = { status: "approved", admin_response: "" };
+                    if (effectivePlayerId) body.override_player_id = effectivePlayerId;
+                    adminFetch(`/api/admin/orders/${order.id}/status`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(body)
+                    }).then((res: Response) => res.json()).then((data: any) => {
+                      if (data.error) { showToast(data.error || "حدث خطأ", 'error'); }
+                      else if (data.finalStatus === "completed") { showToast("✅ تم التنفيذ بنجاح", 'success'); }
+                      else if (data.apiError) { showToast(`⏳ تم إرسال الطلب — قيد المعالجة\n\nملاحظة: ${data.apiError}`, 'success'); }
+                      else { showToast("⏳ تم الإرسال — قيد المعالجة", 'success'); }
+                      fetchAdminOrders();
+                    });
+                  }}
+                  className="flex-1 bg-green-500 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1"
+                ><CheckCircle size={12}/>قبول</button>
+                <button
+                  onClick={() => { showPromptDialog("سبب الرفض:", "رفض الطلب", (r) => { handleOrderAction(order.id, "rejected", r || ""); }, "", "اكتب سبب الرفض..."); }}
+                  className="flex-1 bg-red-100 text-red-600 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1"
+                ><XCircle size={12}/>رفض</button>
               </div>
             </div>
           );
@@ -5824,172 +6836,97 @@ const AdminOrdersTab = ({adminOrders, orderSearch, setOrderSearch, orderDateFilt
       {filteredOrders.map(order => {
         let metaParsed: any = {};
         try { metaParsed = JSON.parse(order.meta || "{}"); } catch {}
-        const isExpanded = expandedOrders.has(order.id);
-        const isLoading = actionLoading === order.id;
-        const storeType = order.order_items?.[0]?.products?.store_type;
+        const isExpanded = expandedOrderId === order.id;
+        const statusColor = order.status==='completed' ? 'bg-green-100 text-green-700' : order.status==='failed'||order.status==='cancelled'||order.status==='rejected' ? 'bg-red-100 text-red-600' : order.status==='processing' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700';
+        const statusLabel = order.status==='completed' ? 'مكتمل' : order.status==='failed'||order.status==='cancelled'||order.status==='rejected' ? 'مرفوض' : order.status==='processing' ? 'معالجة' : 'انتظار';
         return (
         <div key={order.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="p-4">
-            {/* معلومات المستخدم — تظهر دائماً قبل السهم */}
-            <div className="flex items-center gap-3 mb-3">
-              {order.user_avatar ? (
-                <img src={order.user_avatar} className="w-9 h-9 rounded-full object-cover border-2 border-gray-100 shrink-0" referrerPolicy="no-referrer"/>
-              ) : (
-                <div className="w-9 h-9 rounded-full bg-[var(--brand-light)] flex items-center justify-center shrink-0">
-                  <span className="text-[var(--brand)] font-bold text-xs">{(order.user_name||'?')[0]}</span>
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm text-gray-800">{order.user_name}</p>
-                {(order.user_email || order.users?.email) && <p className="text-[10px] text-gray-400 truncate">{order.user_email || order.users?.email}</p>}
-                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                  {order.user_login_id && <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-md font-mono">#{order.user_login_id}</span>}
-                  {(order.user_phone || order.users?.phone) && <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md">{order.user_phone || order.users?.phone}</span>}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${order.status==='completed'?'bg-green-100 text-green-700':order.status==='failed'||order.status==='rejected'?'bg-red-100 text-red-600':order.status==='processing'?'bg-blue-100 text-blue-700':order.status==='pending_admin'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-600'}`}>
-                  {order.status==='completed'?'مكتمل':order.status==='failed'||order.status==='rejected'?'مرفوض':order.status==='processing'?'معالجة':order.status==='pending_admin'?'انتظار موافقة':'انتظار'}
-                </span>
-                <button onClick={() => toggleExpand(order.id)} className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center transition-transform" style={{transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)'}}>
-                  <ChevronDown size={13} className="text-gray-500"/>
-                </button>
+
+          {/* ── معلومات المستخدم — دائمة الظهور ── */}
+          <div className="px-4 pt-4 pb-3 flex items-center gap-3 border-b border-gray-50">
+            <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 flex items-center justify-center">
+              {order.user_avatar
+                ? <img loading="lazy" src={order.user_avatar} className="w-full h-full object-cover" referrerPolicy="no-referrer"/>
+                : <User size={18} className="text-gray-400"/>}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-sm text-gray-800 truncate">{order.user_name}</p>
+              <p className="text-[10px] text-gray-400 truncate">{order.user_email || order.users?.email || "—"}</p>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <span className="text-[10px] text-gray-400">#{order.user_db_id || order.user_id}</span>
+                {(order.user_phone || order.users?.phone) && <span className="text-[10px] text-gray-400">{order.user_phone || order.users?.phone}</span>}
               </div>
             </div>
-            {/* ملخص الطلب */}
-            <div className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
-              <div>
-                <p className="text-[9px] text-gray-400">الطلب</p>
-                <p className="text-xs font-bold text-gray-700 truncate max-w-[140px]">#{order.id} - {order.product_name}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] text-gray-400">المبلغ</p>
-                <p className="text-xs font-bold text-[var(--brand)]">{(order.total_amount || 0).toFixed(2)} $</p>
-              </div>
-            </div>
-            {/* API sync button */}
-            {metaParsed.ahminix_order_id && (order.status === 'processing' || order.status === 'pending') && (
-              <div className="flex gap-2 mt-2">
-                <span className="text-[10px] text-gray-400">API: {metaParsed.ahminix_order_id}</span>
-                <button
-                  onClick={async () => {
-                    const res = await adminFetch(`/api/admin/ahminix/sync-order/${order.id}`, { method: "POST" });
-                    const d = await res.json();
-                    alert(d.error ? `خطأ: ${d.error}` : `${d.oldStatus} ← ${d.newStatus} (API: ${d.ahminixStatus})`);
-                    fetchAdminOrders();
-                  }}
-                  className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-lg font-bold border border-blue-100"
-                >🔄 مزامنة</button>
-              </div>
-            )}
+            <span className={`text-[10px] font-bold px-2 py-1 rounded-full flex-shrink-0 ${statusColor}`}>{statusLabel}</span>
           </div>
-          {/* Expanded details */}
+
+          {/* ── ملخص الطلب — دائم الظهور ── */}
+          <div className="px-4 py-3 flex items-center justify-between cursor-pointer" onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}>
+            <div>
+              <p className="font-bold text-sm text-gray-800">#{order.id} — {order.product_name}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{new Date(order.created_at).toLocaleString("ar-EG")}</p>
+              <p className="text-xs font-bold text-[var(--brand)] mt-0.5">{(order.total_amount || 0).toFixed(2)} $</p>
+            </div>
+            <ChevronDown size={16} className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`}/>
+          </div>
+
+          {/* ── تفاصيل الطلب — تظهر بعد فتح السهم ── */}
           {isExpanded && (
-            <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-2">
-              <p className="text-[10px] font-bold text-gray-500 uppercase mb-2">تفاصيل الطلب</p>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                  <p className="text-[9px] text-gray-400 mb-0.5">رقم الطلب</p>
-                  <p className="text-xs font-bold text-gray-700">#{order.id}</p>
-                </div>
-                <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                  <p className="text-[9px] text-gray-400 mb-0.5">التاريخ والوقت</p>
-                  <p className="text-xs font-bold text-gray-700">{new Date(order.created_at).toLocaleString("ar-EG")}</p>
-                </div>
-                <div className="bg-white rounded-xl p-2.5 border border-gray-100 col-span-2">
-                  <p className="text-[9px] text-gray-400 mb-0.5">المبلغ الإجمالي</p>
-                  <p className="text-xs font-bold text-green-700">{(order.total_amount || 0).toFixed(4)} $</p>
-                </div>
-                {order.category_name && (
-                  <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                    <p className="text-[9px] text-gray-400 mb-0.5">القسم الرئيسي</p>
-                    <p className="text-xs font-bold text-gray-700">{order.category_name}</p>
-                  </div>
-                )}
-                {order.subcategory_name && (
-                  <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                    <p className="text-[9px] text-gray-400 mb-0.5">القسم الفرعي</p>
-                    <p className="text-xs font-bold text-gray-700">{order.subcategory_name}</p>
-                  </div>
-                )}
-                <div className="bg-white rounded-xl p-2.5 border border-gray-100 col-span-2">
-                  <p className="text-[9px] text-gray-400 mb-0.5">المنتج</p>
-                  <p className="text-xs font-bold text-gray-700">{order.product_name}</p>
-                  {storeType && <p className="text-[9px] text-gray-400 mt-0.5">{storeType === 'external_api' ? '🔗 API خارجي' : storeType === 'manual' ? '👤 يدوي' : storeType}</p>}
-                </div>
-                {(metaParsed.playerId || metaParsed.input || metaParsed.userId || metaParsed.gameId || metaParsed.accountId) && (
-                  <div className="bg-white rounded-xl p-2.5 border border-gray-100 col-span-2">
-                    <p className="text-[9px] text-gray-400 mb-0.5">البيانات المُدخلة (Player ID / Input)</p>
-                    <p className="text-xs font-bold text-[var(--brand)] font-mono">{metaParsed.playerId || metaParsed.input || metaParsed.userId || metaParsed.gameId || metaParsed.accountId}</p>
-                  </div>
-                )}
-                {order.order_items?.[0]?.quantity > 1 && (
-                  <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                    <p className="text-[9px] text-gray-400 mb-0.5">الكمية</p>
-                    <p className="text-xs font-bold text-gray-700">×{order.order_items[0].quantity}</p>
-                  </div>
-                )}
-                {metaParsed.ahminix_order_id && (
-                  <div className="bg-white rounded-xl p-2.5 border border-gray-100 col-span-2">
-                    <p className="text-[9px] text-gray-400 mb-0.5">معرف Ahminix</p>
-                    <p className="text-xs font-mono text-blue-700">{metaParsed.ahminix_order_id}</p>
-                    {metaParsed.ahminix_status && <p className="text-[9px] text-gray-500 mt-0.5">حالة API: {metaParsed.ahminix_status}</p>}
-                  </div>
-                )}
-                {order.admin_response && (
-                  <div className="bg-amber-50 rounded-xl p-2.5 border border-amber-100 col-span-2">
-                    <p className="text-[9px] text-amber-600 mb-0.5 font-bold">رد الأدمن</p>
-                    <p className="text-xs text-gray-700">{order.admin_response}</p>
-                  </div>
-                )}
-                {metaParsed.refunded && (
-                  <div className="bg-green-50 rounded-xl p-2.5 border border-green-100 col-span-2">
-                    <p className="text-[9px] text-green-600 font-bold">✅ تم استرداد الرصيد</p>
-                    {metaParsed.refunded_at && <p className="text-[9px] text-gray-400">{new Date(metaParsed.refunded_at).toLocaleString("ar-EG")}</p>}
-                  </div>
-                )}
+            <div className="border-t border-gray-50 bg-gray-50/50 px-4 pb-4 pt-3 space-y-3">
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {order.category_name && <div className="bg-white rounded-xl p-2.5 border border-gray-100"><p className="text-[9px] text-gray-400 mb-0.5">القسم الرئيسي</p><p className="font-bold text-gray-700">{order.category_name}</p></div>}
+                {order.subcategory_name && <div className="bg-white rounded-xl p-2.5 border border-gray-100"><p className="text-[9px] text-gray-400 mb-0.5">القسم الفرعي</p><p className="font-bold text-gray-700">{order.subcategory_name}</p></div>}
+                {order.order_items?.[0]?.products?.store_type && <div className="bg-white rounded-xl p-2.5 border border-gray-100"><p className="text-[9px] text-gray-400 mb-0.5">نوع المتجر</p><p className="font-bold text-gray-700">{order.order_items[0].products.store_type}</p></div>}
+                {(metaParsed.playerId || metaParsed.player_id) && <div className="bg-white rounded-xl p-2.5 border border-gray-100"><p className="text-[9px] text-gray-400 mb-0.5">Player ID</p><p className="font-bold text-gray-700">{metaParsed.playerId || metaParsed.player_id}</p></div>}
+                {metaParsed.ahminix_order_id && <div className="bg-white rounded-xl p-2.5 border border-gray-100 col-span-2"><p className="text-[9px] text-gray-400 mb-0.5">معرف Ahminix</p><p className="font-bold text-gray-700">{metaParsed.ahminix_order_id}</p></div>}
+                {order.admin_response && <div className="bg-white rounded-xl p-2.5 border border-gray-100 col-span-2"><p className="text-[9px] text-gray-400 mb-0.5">رد الأدمن</p><p className="font-bold text-gray-700">{order.admin_response}</p></div>}
+                <div className="bg-white rounded-xl p-2.5 border border-gray-100"><p className="text-[9px] text-gray-400 mb-0.5">استرداد الرصيد</p><p className={`font-bold text-xs ${metaParsed.refunded ? 'text-green-600' : 'text-gray-400'}`}>{metaParsed.refunded ? `✅ تم` : "لا"}</p></div>
               </div>
-              {/* أزرار الإجراءات */}
-              {order.status === 'pending_admin' && (
-                <div className="flex gap-2 mt-3 pt-3 border-t border-gray-200">
-                  <button disabled={isLoading} onClick={() => handleOrderAction(order.id, "approved")} className="flex-1 bg-green-500 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60">
-                    {isLoading ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"/> : <CheckCircle size={12}/>}قبول وإرسال
-                  </button>
-                  <button disabled={isLoading} onClick={() => { const r = prompt("سبب الرفض:"); if (r !== null) handleOrderAction(order.id, "rejected", r || ""); }} className="flex-1 bg-red-100 text-red-600 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"><XCircle size={12}/>رفض</button>
-                </div>
+              {metaParsed.ahminix_order_id && (order.status === 'processing' || order.status === 'pending') && (
+                <button onClick={async (e) => {
+                  e.stopPropagation();
+                  const res = await adminFetch(`/api/admin/ahminix/sync-order/${order.id}`, { method: "POST" });
+                  const d = await res.json();
+                  showToast(d.error ? `خطأ: ${d.error}` : `${d.oldStatus} ← ${d.newStatus} (API: ${d.ahminixStatus})`, 'error');
+                  fetchAdminOrders();
+                }} className="w-full text-xs bg-blue-50 text-blue-600 py-2 rounded-xl font-bold border border-blue-100 active:scale-95">🔄 مزامنة مع Ahminix</button>
               )}
-              {/* تعديل الحالة مباشرة — للمكتمل والمرفوض فقط */}
-              {(order.status === 'completed' || order.status === 'failed' || order.status === 'rejected') && (
-                <div className="mt-3 pt-3 border-t border-gray-200">
-                  <p className="text-[9px] text-gray-400 font-bold mb-2">⚙️ تعديل الحالة مباشرة</p>
-                  <div className="flex gap-2">
-                    {order.status !== 'completed' && (
-                      <button
-                        disabled={isLoading}
-                        onClick={async () => {
-                          if (!confirm("تغيير الحالة إلى مكتمل؟")) return;
-                          await handleOrderAction(order.id, "set_completed" as any);
-                        }}
-                        className="flex-1 bg-green-50 text-green-700 border border-green-200 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"
-                      >
-                        <CheckCircle size={12}/> تعيين مكتمل
-                      </button>
-                    )}
-                    {order.status !== 'failed' && order.status !== 'rejected' && (
-                      <button
-                        disabled={isLoading}
-                        onClick={async () => {
-                          if (!confirm("تغيير الحالة إلى مرفوض؟ سيتم استرداد الرصيد للمستخدم.")) return;
-                          await handleOrderAction(order.id, "set_failed" as any);
-                        }}
-                        className="flex-1 bg-red-50 text-red-600 border border-red-200 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-60"
-                      >
-                        <XCircle size={12}/> تعيين مرفوض
-                      </button>
-                    )}
-                  </div>
+
+              {/* ── تغيير حالة الطلب يدوياً ── */}
+              <div className="bg-white rounded-xl p-3 border border-gray-100 space-y-2">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">تغيير حالة الطلب</p>
+                <div className="flex gap-2">
+                  <select
+                    defaultValue={order.status}
+                    id={`status-select-${order.id}`}
+                    className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-xs outline-none focus:border-[var(--brand)] bg-white"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <option value="pending_admin">⏳ قيد المراجعة</option>
+                    <option value="processing">🔄 قيد المعالجة</option>
+                    <option value="completed">✅ مقبول / مكتمل</option>
+                    <option value="failed">❌ مرفوض</option>
+                    <option value="cancelled">🚫 ملغي</option>
+                  </select>
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const sel = document.getElementById(`status-select-${order.id}`) as HTMLSelectElement;
+                      const newStatus = sel?.value;
+                      if (!newStatus) return;
+                      const res = await adminFetch(`/api/admin/orders/${order.id}/status`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ status: newStatus === "failed" ? "rejected" : newStatus, admin_response: "" })
+                      });
+                      const d = await res.json();
+                      if (d.error) showToast(`خطأ: ${d.error}`, 'error');
+                      else { showToast("✅ تم تحديث الحالة", 'success'); fetchAdminOrders(); }
+                    }}
+                    className="bg-[var(--brand)] text-white px-3 py-2 rounded-lg text-xs font-bold active:scale-95"
+                  >حفظ</button>
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>
@@ -6003,15 +6940,9 @@ const AdminOrdersTab = ({adminOrders, orderSearch, setOrderSearch, orderDateFilt
 };
 
 const AdminTransactionsTab = ({adminTransactions, transSearch, setTransSearch, handleApproveTransaction, handleRejectTransaction}: any) => {
-  const filteredTrans = adminTransactions.filter(t => !transSearch || t.user_name?.includes(transSearch) || String(t.id).includes(transSearch));
-  const [expandedTx, setExpandedTx] = React.useState<Set<number>>(new Set());
-  const [overrideAmounts, setOverrideAmounts] = React.useState<Record<number,string>>({});
-  const toggleTx = (id: number) => setExpandedTx(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
-  const pmTypeLabel = (type: string) => {
-    if (!type) return null;
-    const map: Record<string,string> = { manual: '📋 يدوي', syriatel: '📱 سيريتل كاش', shamcash: '💳 شام كاش' };
-    return map[type] || type;
-  };
+  const [expandedId, setExpandedId] = React.useState<number|null>(null);
+  const [customAmounts, setCustomAmounts] = React.useState<Record<number,string>>({});
+  const filteredTrans = adminTransactions.filter(t => !transSearch || t.user_name?.includes(transSearch) || String(t.id).includes(transSearch) || t.user_email?.includes(transSearch));
   return (
 
   <div className="space-y-4">
@@ -6021,104 +6952,94 @@ const AdminTransactionsTab = ({adminTransactions, transSearch, setTransSearch, h
     </div>
     <div className="space-y-3">
       {filteredTrans.map(t => {
-        const isExpanded = expandedTx.has(t.id);
+        const isExpanded = expandedId === t.id;
+        const customAmt = customAmounts[t.id] ?? "";
         return (
         <div key={t.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {/* معلومات المستخدم - تظهر دائماً قبل السهم */}
-          <div className="p-4">
-            <div className="flex items-center gap-3 mb-3">
-              {t.user_avatar ? (
-                <img src={t.user_avatar} className="w-10 h-10 rounded-full object-cover border-2 border-gray-100 shrink-0" referrerPolicy="no-referrer"/>
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-[var(--brand-light)] flex items-center justify-center shrink-0">
-                  <span className="text-[var(--brand)] font-bold text-sm">{(t.user_name||'?')[0]}</span>
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm text-gray-800">{t.user_name}</p>
-                {t.user_email && <p className="text-[10px] text-gray-400 truncate">{t.user_email}</p>}
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  {t.user_login_id && <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-md font-mono">#{t.user_login_id}</span>}
-                  {t.user_phone && <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md">{t.user_phone}</span>}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${t.status==='approved'?'bg-green-100 text-green-700':t.status==='rejected'?'bg-red-100 text-red-600':'bg-amber-100 text-amber-700'}`}>
-                  {t.status==='approved'?'مقبول':t.status==='rejected'?'مرفوض':'منتظر'}
-                </span>
-                <button onClick={() => toggleTx(t.id)} className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center transition-transform" style={{transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)'}}>
-                  <ChevronDown size={13} className="text-gray-500"/>
-                </button>
+
+          {/* ── معلومات المستخدم — دائمة الظهور ── */}
+          <div className="px-4 pt-4 pb-3 flex items-center gap-3 border-b border-gray-50">
+            <div className="w-10 h-10 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 flex items-center justify-center">
+              {t.user_avatar
+                ? <img loading="lazy" src={t.user_avatar} className="w-full h-full object-cover" referrerPolicy="no-referrer"/>
+                : <User size={18} className="text-gray-400"/>}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-sm text-gray-800 truncate">{t.user_name || "—"}</p>
+              <p className="text-[10px] text-gray-400 truncate">{t.user_email || "—"}</p>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <span className="text-[10px] text-gray-400">#{t.user_db_id || t.user_id}</span>
+                {t.user_phone && t.user_phone !== "—" && <span className="text-[10px] text-gray-400">{t.user_phone}</span>}
               </div>
             </div>
-            {/* ملخص سريع */}
-            <div className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
-              <div>
-                <p className="text-[9px] text-gray-400">المبلغ</p>
-                <p className="text-xs font-black text-green-600">{(t.amount || 0).toFixed(2)} $</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[9px] text-gray-400">طريقة الدفع</p>
-                <p className="text-[10px] font-bold text-gray-700">{t.payment_method_name || '—'}{t.payment_method_type ? <span className="mr-1 text-[9px] text-gray-400">({pmTypeLabel(t.payment_method_type)})</span> : null}</p>
-              </div>
+            <div className="flex-shrink-0 text-left">
+              <p className="text-sm font-black text-green-600">{(t.amount||0).toFixed(2)} $</p>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${t.status==='approved'?'bg-green-100 text-green-700':t.status==='rejected'?'bg-red-100 text-red-600':'bg-amber-100 text-amber-700'}`}>
+                {t.status==='approved'?'مقبول':t.status==='rejected'?'مرفوض':'منتظر'}
+              </span>
             </div>
           </div>
 
-          {/* التفاصيل - تظهر بعد فتح السهم */}
+          {/* ── ملخص الدفعة — دائم الظهور + زر السهم ── */}
+          <div className="px-4 py-3 flex items-center justify-between cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : t.id)}>
+            <div>
+              <p className="font-bold text-xs text-gray-700">TX{t.id} · {t.payment_method_name || "—"}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">{new Date(t.created_at).toLocaleString("ar-EG")}</p>
+              {t.tx_number && <p className="text-[10px] text-gray-400 mt-0.5">رقم العملية: {t.tx_number}</p>}
+            </div>
+            <ChevronDown size={16} className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded?'rotate-180':''}`}/>
+          </div>
+
+          {/* ── تفاصيل الدفعة — تظهر بعد فتح السهم ── */}
           {isExpanded && (
-            <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-3">
-              <p className="text-[10px] font-bold text-gray-500 uppercase mb-2">تفاصيل الدفعة</p>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                  <p className="text-[9px] text-gray-400 mb-0.5">رقم العملية</p>
-                  <p className="text-xs font-black text-gray-700">TX{t.id}</p>
-                </div>
-                <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                  <p className="text-[9px] text-gray-400 mb-0.5">المبلغ المطلوب</p>
-                  <p className="text-xs font-black text-green-600">{(t.amount || 0).toFixed(2)} $</p>
-                </div>
-                <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                  <p className="text-[9px] text-gray-400 mb-0.5">تاريخ الطلب</p>
-                  <p className="text-[10px] font-bold text-gray-700">{new Date(t.created_at).toLocaleDateString("ar-EG", {year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})}</p>
-                </div>
-                <div className="bg-white rounded-xl p-2.5 border border-gray-100">
-                  <p className="text-[9px] text-gray-400 mb-0.5">طريقة الشحن</p>
-                  <p className="text-[10px] font-bold text-gray-700 truncate">{t.payment_method_name || '—'}</p>
-                  {t.payment_method_type && <p className="text-[9px] text-gray-400 mt-0.5">{pmTypeLabel(t.payment_method_type)}</p>}
-                </div>
-                {t.tx_number && (
-                  <div className="bg-white rounded-xl p-2.5 border border-gray-100 col-span-2">
-                    <p className="text-[9px] text-gray-400 mb-0.5">رقم العملية البنكية</p>
-                    <p className="text-xs font-mono font-bold text-gray-700">{t.tx_number}</p>
-                  </div>
-                )}
-              </div>
+            <div className="border-t border-gray-50 bg-gray-50/50 px-4 pb-4 pt-3 space-y-3">
+              {/* صورة الإيصال */}
               {t.receipt_image_url && (
                 <div>
                   <p className="text-[9px] text-gray-400 font-bold mb-1">صورة الإيصال</p>
-                  <img src={t.receipt_image_url} className="w-full h-40 object-cover rounded-xl cursor-pointer" referrerPolicy="no-referrer" onClick={() => window.open(t.receipt_image_url, '_blank')}/>
+                  <img loading="lazy" src={t.receipt_image_url} className="w-full h-44 object-cover rounded-xl cursor-pointer border border-gray-100" referrerPolicy="no-referrer" onClick={() => window.open(t.receipt_image_url, '_blank')}/>
                 </div>
               )}
+              {/* ملاحظة */}
+              {t.note && (
+                <div className="bg-white rounded-xl p-2.5 border border-gray-100">
+                  <p className="text-[9px] text-gray-400 font-bold mb-0.5">الملاحظة</p>
+                  <p className="text-xs text-gray-700">{t.note}</p>
+                </div>
+              )}
+
+              {/* أزرار القبول/الرفض فقط للمعلقة */}
               {t.status === 'pending' && (
-                <div className="space-y-2 pt-2 border-t border-gray-200">
-                  <div>
-                    <p className="text-[9px] text-gray-400 font-bold mb-1">تغيير المبلغ (اختياري)</p>
-                    <input
-                      type="number"
-                      step="0.0000001"
-                      min="0"
-                      placeholder={`المبلغ الحالي: ${(t.amount||0).toFixed(2)} $`}
-                      value={overrideAmounts[t.id] ?? ''}
-                      onChange={e => setOverrideAmounts(prev => ({...prev, [t.id]: e.target.value}))}
-                      className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:border-[var(--brand)]"
-                    />
-                    {overrideAmounts[t.id] && parseFloat(overrideAmounts[t.id]) > 0 && (
-                      <p className="text-[9px] text-amber-600 mt-1 font-bold">⚠️ سيتم إضافة {parseFloat(overrideAmounts[t.id]).toFixed(2)} $ بدلاً من {(t.amount||0).toFixed(2)} $</p>
+                <div className="space-y-2">
+                  <div className="bg-white rounded-xl border border-gray-100 p-3">
+                    <p className="text-[10px] text-gray-400 font-bold mb-1.5">تعديل المبلغ (اختياري)</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number" min="0.01" step="0.01"
+                        placeholder={`الافتراضي: ${(t.amount||0).toFixed(2)}`}
+                        value={customAmt}
+                        onChange={e => setCustomAmounts(prev => ({...prev, [t.id]: e.target.value}))}
+                        className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs outline-none focus:border-[var(--brand)]"
+                      />
+                      <span className="text-xs text-gray-400 font-bold">$</span>
+                    </div>
+                    {customAmt && parseFloat(customAmt) > 0 && (
+                      <p className="text-[10px] text-amber-600 mt-1">⚠️ سيتم إضافة {parseFloat(customAmt).toFixed(2)}$ بدلاً من {(t.amount||0).toFixed(2)}$</p>
                     )}
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => handleApproveTransaction(t.id, overrideAmounts[t.id])} className="flex-1 bg-green-500 text-white py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1"><CheckCircle size={13}/>قبول</button>
-                    <button onClick={() => handleRejectTransaction(t.id)} className="flex-1 bg-red-100 text-red-600 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1"><XCircle size={13}/>رفض</button>
+                    <button
+                      onClick={() => {
+                        const amt = customAmt && parseFloat(customAmt) > 0 ? parseFloat(customAmt) : undefined;
+                        handleApproveTransaction(t.id, amt);
+                        setCustomAmounts(prev => { const n={...prev}; delete n[t.id]; return n; });
+                      }}
+                      className="flex-1 bg-green-500 text-white py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1 active:scale-95">
+                      <CheckCircle size={13}/>قبول{customAmt && parseFloat(customAmt)>0 ? ` (${parseFloat(customAmt).toFixed(2)}$)` : ""}
+                    </button>
+                    <button onClick={() => handleRejectTransaction(t.id)} className="flex-1 bg-red-100 text-red-600 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1 active:scale-95">
+                      <XCircle size={13}/>رفض
+                    </button>
                   </div>
                 </div>
               )}
@@ -6134,7 +7055,7 @@ const AdminTransactionsTab = ({adminTransactions, transSearch, setTransSearch, h
   );
 };
 
-const AdminElementsTab = ({categories, subcategories, subSubCategories, fetchCategories, fetchSubcategories, fetchSubSubCategories, paymentMethods, fetchPaymentMethods, banners, fetchBanners, offers, fetchOffers, handleDelete}: any) => {
+const AdminElementsTab = ({categories, subcategories, subSubCategories, fetchCategories, fetchSubcategories, fetchSubSubCategories, paymentMethods, fetchPaymentMethods, banners, fetchBanners, offers, fetchOffers, handleDelete, adminFetch}: any) => {
   const [editingItem, setEditingItem] = React.useState<any>(null);
   const [editingType, setEditingType] = React.useState<string>("");
   const [elementsSubTab, setElementsSubTab] = React.useState<string>("");
@@ -6143,6 +7064,8 @@ const AdminElementsTab = ({categories, subcategories, subSubCategories, fetchCat
   const [loadingElements, setLoadingElements] = React.useState(false);
   const [allSubcats, setAllSubcats] = React.useState<any[]>([]);
   const [allSubSubs, setAllSubSubs] = React.useState<any[]>([]);
+  // المسارات التي تحتاج توكن أدمن
+  const adminRoutes = new Set(["/api/admin/products-all", "/api/admin/vouchers"]);
   React.useEffect(() => {
   fetch("/api/subcategories").then(r=>r.json()).then(setAllSubcats).catch(()=>{});
   fetch("/api/sub-sub-categories").then(r=>r.json()).then(setAllSubSubs).catch(()=>{});
@@ -6150,9 +7073,13 @@ const AdminElementsTab = ({categories, subcategories, subSubCategories, fetchCat
   const loadElements = async (type: string) => {
   setLoadingElements(true); setAllElements([]);
   const map: Record<string,string> = { categories:"/api/categories", subcategories:"/api/subcategories", subSubCategories:"/api/sub-sub-categories", products:"/api/admin/products-all", paymentMethods:"/api/payment-methods", banners:"/api/banners", offers:"/api/offers", vouchers:"/api/admin/vouchers" };
-  const needsAuth = ["products","vouchers"].includes(type);
-  const headers: any = needsAuth ? { Authorization: `Bearer ${localStorage.getItem("adminToken")||""}` } : {};
-  try { const res = await fetch(map[type], { headers }); const data = await res.json(); setAllElements(Array.isArray(data)?data:[]); } catch { setAllElements([]); }
+  const url = map[type];
+  try {
+    // استخدم adminFetch للمسارات المحمية، وfetch العادي للمسارات العامة
+    const res = adminRoutes.has(url) ? await adminFetch(url) : await fetch(url);
+    const data = await res.json();
+    setAllElements(Array.isArray(data)?data:[]);
+  } catch { setAllElements([]); }
   setLoadingElements(false);
   };
   const handleSaveEdit = async () => {
@@ -6160,9 +7087,9 @@ const AdminElementsTab = ({categories, subcategories, subSubCategories, fetchCat
   const epMap: Record<string,string> = { categories:"categories", subcategories:"subcategories", subSubCategories:"sub-sub-categories", products:"products", paymentMethods:"payment-methods", banners:"banners", offers:"offers", vouchers:"vouchers" };
   try {
   const res = await adminFetch(`/api/admin/${epMap[editingType]}/${editingItem.id}`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify(editingItem) });
-  if (res.ok) { alert("تم التعديل"); setEditingItem(null); setEditingType(""); loadElements(elementsType); fetchCategories(); fetchSubcategories(); fetchSubSubCategories(); fetchPaymentMethods(); fetchBanners(); fetchOffers(); }
-  else { const d = await res.json(); alert("فشل: "+(d.error||"")); }
-  } catch { alert("خطأ في الاتصال"); }
+  if (res.ok) { showToast("تم التعديل", 'success'); setEditingItem(null); setEditingType(""); loadElements(elementsType); fetchCategories(); fetchSubcategories(); fetchSubSubCategories(); fetchPaymentMethods(); fetchBanners(); fetchOffers(); }
+  else { const d = await res.json(); showToast("فشل: "+(d.error||""), 'error'); }
+  } catch { showToast("خطأ في الاتصال", 'error'); }
   };
   const delMap: Record<string,string> = { categories:"categories", subcategories:"subcategories", subSubCategories:"sub-sub-categories", products:"products", paymentMethods:"payment-methods", banners:"banners", offers:"offers", vouchers:"vouchers" };
   const tabs4 = [
@@ -6215,16 +7142,16 @@ const AdminElementsTab = ({categories, subcategories, subSubCategories, fetchCat
         {!loadingElements && allElements.map((item: any) => (
           <div key={item.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-100 shadow-sm">
             <div className="flex items-center gap-2 min-w-0">
-              {item.image_url && <img src={item.image_url} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" referrerPolicy="no-referrer"/>}
+              {item.image_url && <img loading="lazy" src={item.image_url} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" referrerPolicy="no-referrer"/>}
               <div className="min-w-0">
                 <p className="text-xs font-bold text-gray-700 truncate">{item.name||item.title||item.code||`#${item.id}`}</p>
-                {item.price !== undefined && <p className="text-[10px] text-brand">{(item.store_type==='quantities'||item.store_type==='external_api')?`${parseFloat(item.price_per_unit||item.price||0).toFixed(7)}$/وحدة`:`${Number(item.price).toFixed(2)} $`}</p>}
+                {item.price !== undefined && <p className="text-[10px] text-brand">{item.store_type==='quantities'?`${item.price_per_unit}$/وحدة`:`${Number(item.price).toFixed(2)} $`}</p>}
                 {item.amount !== undefined && !item.price && <p className="text-[10px] text-brand">{item.amount} $</p>}
               </div>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
               <button onClick={() => { setEditingItem({...item}); setEditingType(elementsType); }} className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Pencil size={14}/></button>
-              <button onClick={async () => { await handleDelete(delMap[elementsType]||elementsType, item.id); loadElements(elementsType); }} className="p-2 bg-red-50 text-red-500 rounded-lg"><Trash2 size={14}/></button>
+              <button onClick={() => { handleDelete(delMap[elementsType]||elementsType, item.id, () => loadElements(elementsType)); }} className="p-2 bg-red-50 text-red-500 rounded-lg"><Trash2 size={14}/></button>
             </div>
           </div>
         ))}
@@ -6252,20 +7179,12 @@ const AdminElementsTab = ({categories, subcategories, subSubCategories, fetchCat
                 <AdminImageUpload label="صورة المنتج" currentUrl={editingItem.image_url||""} onUpload={url => setEditingItem({...editingItem,image_url:url})}/>
                 <select className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={editingItem.store_type||"normal"} onChange={e => setEditingItem({...editingItem,store_type:e.target.value})}><option value="normal">متجر عادي</option><option value="quick_order">طلب سريع</option><option value="quantities">متجر الكميات</option><option value="numbers">متجر الأرقام</option><option value="external_api">شحن فوري (API خارجي)</option></select>
                 {(editingItem.store_type==='quantities'||editingItem.store_type==='external_api') ? (
-                  <div className="space-y-2 p-3 bg-blue-50 rounded-xl border border-blue-100">
-                    <input type="number" placeholder="أقل كمية" className="w-full p-2 bg-white rounded-lg text-sm outline-none" value={editingItem.min_quantity||""} onChange={e => setEditingItem({...editingItem,min_quantity:e.target.value})}/>
-                    <div>
-                      <label className="text-[10px] font-bold text-blue-600 mb-1 block">سعر الوحدة $ (يُخزَّن بـ 7 خانات عشرية)</label>
-                      <input type="number" step="0.0000001" placeholder="مثال: 0.0012345" className="w-full p-2 bg-white rounded-lg text-sm outline-none border border-blue-200 font-mono" value={editingItem.price_per_unit||""} onChange={e => setEditingItem({...editingItem, price_per_unit: e.target.value})}/>
-                      {editingItem.price_per_unit && <p className="text-[10px] text-blue-500 mt-1">القيمة المخزونة: {parseFloat(editingItem.price_per_unit||0).toFixed(7)}</p>}
-                    </div>
-                    {editingItem.store_type==='external_api' && <input type="text" placeholder="معرف المنتج الخارجي" className="w-full p-2 bg-white rounded-lg text-sm outline-none border border-blue-100" value={editingItem.external_id||""} onChange={e => setEditingItem({...editingItem,external_id:e.target.value})}/>}
-                  </div>
-                ) : <input type="number" step="0.0000001" placeholder="السعر $" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={editingItem.price||""} onChange={e => setEditingItem({...editingItem,price:e.target.value})}/>}
+                  <div className="space-y-2 p-3 bg-gray-50 rounded-xl"><input type="number" placeholder="أقل كمية" className="w-full p-2 bg-white rounded-lg text-sm outline-none" value={editingItem.min_quantity||""} onChange={e => setEditingItem({...editingItem,min_quantity:e.target.value})}/><input type="number" placeholder="أكثر كمية" className="w-full p-2 bg-white rounded-lg text-sm outline-none" value={editingItem.max_quantity||""} onChange={e => setEditingItem({...editingItem,max_quantity:e.target.value})}/><input type="number" step="0.000001" placeholder="سعر الوحدة" className="w-full p-2 bg-white rounded-lg text-sm outline-none" value={editingItem.price_per_unit||""} onChange={e => setEditingItem({...editingItem,price_per_unit:e.target.value})}/>{editingItem.store_type==='external_api' && <input type="text" placeholder="معرف المنتج الخارجي" className="w-full p-2 bg-white rounded-lg text-sm outline-none border border-blue-100" value={editingItem.external_id||""} onChange={e => setEditingItem({...editingItem,external_id:e.target.value})}/>}</div>
+                ) : <input type="number" step="0.01" placeholder="السعر $" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={editingItem.price||""} onChange={e => setEditingItem({...editingItem,price:e.target.value})}/>}
                 <div className="flex items-center gap-2"><input type="checkbox" checked={!!editingItem.requires_input} onChange={e => setEditingItem({...editingItem,requires_input:e.target.checked})} className="w-4 h-4 rounded"/><label className="text-xs font-bold text-gray-600">يتطلب بيانات إضافية</label></div>
               </div>
             )}
-            {editingType === "paymentMethods" && <div className="space-y-3"><input type="text" placeholder="اسم طريقة الدفع" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={editingItem.name||""} onChange={e => setEditingItem({...editingItem,name:e.target.value})}/><AdminImageUpload label="صورة الطريقة" currentUrl={editingItem.image_url||""} onUpload={url => setEditingItem({...editingItem,image_url:url})}/><input type="text" placeholder="رقم المحفظة" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={editingItem.wallet_address||""} onChange={e => setEditingItem({...editingItem,wallet_address:e.target.value})}/><input type="number" placeholder="أقل مبلغ $" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={editingItem.min_amount||""} onChange={e => setEditingItem({...editingItem,min_amount:e.target.value})}/></div>}
+            {editingType === "paymentMethods" && <div className="space-y-3"><input type="text" placeholder="اسم طريقة الدفع" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={editingItem.name||""} onChange={e => setEditingItem({...editingItem,name:e.target.value})}/><AdminImageUpload label="صورة الطريقة" currentUrl={editingItem.image_url||""} onUpload={url => setEditingItem({...editingItem,image_url:url})}/><input type="text" placeholder="رقم المحفظة" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={editingItem.wallet_address||""} onChange={e => setEditingItem({...editingItem,wallet_address:e.target.value})}/><textarea placeholder="وصف طريقة الدفع (اختياري)" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none h-16 resize-none" value={editingItem.description||""} onChange={e => setEditingItem({...editingItem,description:e.target.value})}/><input type="number" placeholder="أقل مبلغ $" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={editingItem.min_amount||""} onChange={e => setEditingItem({...editingItem,min_amount:e.target.value})}/></div>}
             {editingType === "banners" && <div className="space-y-3"><AdminImageUpload label="صورة البانر" currentUrl={editingItem.image_url||""} onUpload={url => setEditingItem({...editingItem,image_url:url})}/></div>}
             {editingType === "offers" && <div className="space-y-3"><input type="text" placeholder="عنوان العرض" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={editingItem.title||""} onChange={e => setEditingItem({...editingItem,title:e.target.value})} autoFocus/><textarea placeholder="وصف العرض" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none h-20 resize-none" value={editingItem.description||""} onChange={e => setEditingItem({...editingItem,description:e.target.value})}/><AdminImageUpload label="صورة العرض" currentUrl={editingItem.image_url||""} onUpload={url => setEditingItem({...editingItem,image_url:url})}/></div>}
             {editingType === "vouchers" && <div className="space-y-3"><input type="text" placeholder="الكود" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={editingItem.code||""} onChange={e => setEditingItem({...editingItem,code:e.target.value})}/><input type="number" placeholder="القيمة $" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={editingItem.amount||""} onChange={e => setEditingItem({...editingItem,amount:e.target.value})}/><input type="number" placeholder="أقصى استخدامات" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={editingItem.max_uses||""} onChange={e => setEditingItem({...editingItem,max_uses:e.target.value})}/></div>}
@@ -6277,7 +7196,7 @@ const AdminElementsTab = ({categories, subcategories, subSubCategories, fetchCat
 
     {/* Syrbit Copyright */}
     <div className="flex justify-center pb-4 pt-2">
-      <a href="https://wa.me/212773963897" target="_blank" rel="noopener noreferrer"
+      <a href="https://chat.whatsapp.com/DELXtdEh9ua5edFTupESNU" target="_blank" rel="noopener noreferrer"
         className="flex items-center gap-1.5 text-[10px] text-gray-400 hover:text-purple-500 transition-colors">
         <span>برمجة شركة</span>
         <span className="font-black text-purple-500">Syrbit</span>
@@ -6332,16 +7251,16 @@ const AdminPanel = ({
       requires_input: false, 
       store_type: "normal",
       min_quantity: "",
+      max_quantity: "",
       price_per_unit: "",
       external_id: ""
     });
-    const [newPaymentMethod, setNewPaymentMethod] = useState({ name: "", image_url: "", wallet_address: "", min_amount: "", instructions: "", method_type: "manual", api_account: "" });
+    const [newPaymentMethod, setNewPaymentMethod] = useState({ name: "", image_url: "", wallet_address: "", min_amount: "", instructions: "", description: "", method_type: "manual", api_account: "" });
     const [newBanner, setNewBanner] = useState({ image_url: "" });
     const [manualTopup, setManualTopup] = useState({ userId: "", amount: "" });
     const [settings, setSettings] = useState<any[]>([]);
     const [privacyPolicy, setPrivacyPolicy] = useState("");
     const [supportWhatsapp, setSupportWhatsapp] = useState("");
-    const [tickerTextAdmin, setTickerTextAdmin] = useState("");
 
     const [adminUsers, setAdminUsers] = useState<any[]>([]);
     const [adminVouchers, setAdminVouchers] = useState<any[]>([]);
@@ -6366,7 +7285,6 @@ const AdminPanel = ({
     const [editingGoal, setEditingGoal] = useState<any>(null);
     const [savingDiscount, setSavingDiscount] = useState(false);
     const [savingReward, setSavingReward] = useState(false);
-    const [overridePlayerIds, setOverridePlayerIds] = React.useState<Record<number,string>>({});
 
     const fetchAdminProducts = async (subId: string) => {
       if (!subId) return;
@@ -6377,19 +7295,20 @@ const AdminPanel = ({
 
     const handleUpdateProductPrice = async (id: number, currentPrice: number, storeType?: string) => {
       const label = storeType === 'quantities' ? "السعر لكل وحدة" : "السعر الجديد";
-      const newPrice = prompt(`أدخل ${label}:`, currentPrice.toString());
-      if (newPrice !== null) {
-        const field = storeType === 'quantities' ? 'price_per_unit' : 'price';
-        const res = await adminFetch(`/api/admin/products/${id}/price`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ [field]: parseFloat(newPrice) })
-        });
-        if (res.ok) {
-          alert("تم التحديث بنجاح");
-          fetchAdminProducts(selectedSubId);
+      showPromptDialog(`أدخل ${label}:`, "تعديل السعر", async (newPrice) => {
+        if (newPrice !== null && newPrice !== '') {
+          const field = storeType === 'quantities' ? 'price_per_unit' : 'price';
+          const res = await adminFetch(`/api/admin/products/${id}/price`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ [field]: parseFloat(newPrice) })
+          });
+          if (res.ok) {
+            showToast("تم التحديث بنجاح", 'success');
+            fetchAdminProducts(selectedSubId);
+          }
         }
-      }
+      }, currentPrice.toString(), `مثال: ${currentPrice}`);
     };
     const [newVoucher, setNewVoucher] = useState({ code: "", amount: "", max_uses: "1" });
     const [newOffer, setNewOffer] = useState({ title: "", description: "", image_url: "" });
@@ -6405,7 +7324,7 @@ const AdminPanel = ({
         a.download = `database_export_${new Date().toISOString().split('T')[0]}.json`;
         a.click();
       } catch (e) {
-        alert("فشل تصدير البيانات");
+        showToast("فشل تصدير البيانات", 'error');
       }
     };
 
@@ -6413,38 +7332,39 @@ const AdminPanel = ({
       const file = e.target.files?.[0];
       if (!file) return;
       
-      if (!confirm("تحذير: سيتم مسح كافة البيانات الحالية واستبدالها بالبيانات المستوردة. هل أنت متأكد؟")) return;
-
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        try {
-          const data = JSON.parse(event.target?.result as string);
-          const res = await adminFetch("/api/admin/import-db", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data)
-          });
-          if (res.ok) {
-            alert("تم استيراد البيانات بنجاح! سيتم إعادة تحميل الصفحة.");
-            window.location.reload();
-          } else {
-            const err = await res.json();
-            alert(`فشل الاستيراد: ${err.error}`);
+      showConfirm("تحذير: سيتم مسح كافة البيانات الحالية واستبدالها بالبيانات المستوردة. هل أنت متأكد؟", "استيراد قاعدة البيانات", () => {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const data = JSON.parse(event.target?.result as string);
+            const res = await adminFetch("/api/admin/import-db", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(data)
+            });
+            if (res.ok) {
+              showToast("تم استيراد البيانات بنجاح! سيتم إعادة تحميل الصفحة.", 'success');
+              window.location.reload();
+            } else {
+              const err = await res.json();
+              showToast(`فشل الاستيراد: ${err.error}`, 'error');
+            }
+          } catch (err) {
+            showToast("ملف غير صالح", 'info');
           }
-        } catch (err) {
-          alert("ملف غير صالح");
-        }
-      };
-      reader.readAsText(file);
+        };
+        reader.readAsText(file);
+      }, true);
     };
 
     const handleClearDB = async () => {
-      if (!confirm("هل أنت متأكد من مسح كافة بيانات الموقع؟ لا يمكن التراجع عن هذه الخطوة.")) return;
-      const res = await adminFetch("/api/admin/clear-db", { method: "POST" });
-      if (res.ok) {
-        alert("تم مسح قاعدة البيانات بنجاح");
-        window.location.reload();
-      }
+      showConfirm("هل أنت متأكد من مسح كافة بيانات الموقع؟ لا يمكن التراجع عن هذه الخطوة.", "مسح قاعدة البيانات", async () => {
+        const res = await adminFetch("/api/admin/clear-db", { method: "POST" });
+        if (res.ok) {
+          showToast("تم مسح قاعدة البيانات بنجاح", 'success');
+          window.location.reload();
+        }
+      }, true);
     };
 
     useEffect(() => {
@@ -6470,20 +7390,21 @@ const AdminPanel = ({
       if (res.ok) {
         setNewVoucher({ code: "", amount: "", max_uses: "1" });
         fetchAdminVouchers();
-        alert("تم إنشاء الكود بنجاح");
+        showToast("تم إنشاء الكود بنجاح", 'success');
       } else {
         const data = await res.json();
-        alert(data.error || "فشل إنشاء الكود");
+        showToast(data.error || "فشل إنشاء الكود", 'error');
       }
     };
 
     const handleDeleteVoucher = async (id: number) => {
-      if (!confirm("هل أنت متأكد من حذف هذا الكود؟")) return;
-      const res = await adminFetch(`/api/admin/vouchers/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        fetchAdminVouchers();
-        alert("تم حذف الكود");
-      }
+      showConfirm("هل أنت متأكد من حذف هذا الكود؟", "حذف الكود", async () => {
+        const res = await adminFetch(`/api/admin/vouchers/${id}`, { method: "DELETE" });
+        if (res.ok) {
+          fetchAdminVouchers();
+          showToast("تم حذف الكود", 'success');
+        }
+      }, true);
     };
 
     const fetchAdminSettings = async () => {
@@ -6494,12 +7415,10 @@ const AdminPanel = ({
       const sw = data.find((s: any) => s.key === 'support_whatsapp');
       const vd = data.find((s: any) => s.key === 'vip_discount');
       const rc = data.find((s: any) => s.key === 'referral_commission');
-      const tt = data.find((s: any) => s.key === 'ticker_text');
       if (pp) setPrivacyPolicy(pp.value);
       if (sw) setSupportWhatsapp(sw.value);
       if (vd) setVipDiscountVal(vd.value);
       if (rc) setReferralCommissionVal(rc.value);
-      if (tt) setTickerTextAdmin(tt.value);
     };
 
     const handleUpdateSetting = async (key: string, value: string) => {
@@ -6509,34 +7428,28 @@ const AdminPanel = ({
         body: JSON.stringify({ key, value })
       });
       if (res.ok) {
-        alert("تم تحديث الإعداد بنجاح");
+        showToast("تم تحديث الإعداد بنجاح", 'success');
         fetchAdminSettings();
         // تحديث siteSettings في الـ App الرئيسي لتنعكس التغييرات فوراً
-        fetch("/api/settings").then(r => r.json()).then((data: any[]) => {
-          setSiteSettings(data);
-          const tt = data.find((s: any) => s.key === 'ticker_text');
-          if (tt !== undefined) setTickerText(tt ? tt.value : "");
-        }).catch(() => {});
+        fetch("/api/settings").then(r => r.json()).then((data: any[]) => setSiteSettings(data)).catch(() => {});
       }
     };
 
     const handleCloudSync = async () => {
-      if (!confirm("هل تريد مزامنة كافة البيانات الحالية مع قاعدة البيانات السحابية (Supabase)؟")) return;
-      try {
-        const res = await adminFetch("/api/admin/sync-to-cloud", { method: "POST" });
-        const data = await res.json();
-        if (res.ok) {
-          let msg = "تمت المزامنة السحابية بنجاح!\n\nالتفاصيل:\n";
-          for (const [table, status] of Object.entries(data.details || {})) {
-            msg += `${table}: ${status}\n`;
+      showConfirm("هل تريد مزامنة كافة البيانات الحالية مع قاعدة البيانات السحابية (Supabase)؟", "مزامنة سحابية", async () => {
+        try {
+          const res = await adminFetch("/api/admin/sync-to-cloud", { method: "POST" });
+          const data = await res.json();
+          if (res.ok) {
+            let msg = "تمت المزامنة السحابية بنجاح!";
+            showToast(msg, 'success');
+          } else {
+            showToast(`فشل المزامنة: ${data.error}`, 'error');
           }
-          alert(msg);
-        } else {
-          alert(`فشل المزامنة: ${data.error}`);
+        } catch (e) {
+          showToast("خطأ في الاتصال بالسيرفر", 'error');
         }
-      } catch (e) {
-        alert("خطأ في الاتصال بالسيرفر");
-      }
+      }, false);
     };
 
     const fetchAdminUsers = async () => {
@@ -6553,41 +7466,43 @@ const AdminPanel = ({
       });
       if (res.ok) {
         fetchAdminUsers();
-        alert("تم تحديث حالة VIP");
+        showToast("تم تحديث حالة VIP", 'success');
       }
     };
 
     const handleDeleteUser = async (userId: number) => {
-      if (!confirm("هل أنت متأكد من حذف هذا المستخدم نهائياً؟ لا يمكن التراجع!")) return;
-      try {
-        const res = await adminFetch(`/api/admin/users/${userId}`, { method: "DELETE" });
-        const data = await res.json();
-        if (res.ok) {
-          alert("✅ تم حذف المستخدم بنجاح");
-          fetchAdminUsers();
-        } else {
-          alert("❌ " + (data.error || "فشل الحذف"));
-        }
-      } catch (e) { alert("خطأ في الاتصال"); }
+      showConfirm("هل أنت متأكد من حذف هذا المستخدم نهائياً؟ لا يمكن التراجع!", "حذف المستخدم", async () => {
+        try {
+          const res = await adminFetch(`/api/admin/users/${userId}`, { method: "DELETE" });
+          const data = await res.json();
+          if (res.ok) {
+            showToast("✅ تم حذف المستخدم بنجاح", 'success');
+            fetchAdminUsers();
+          } else {
+            showToast("❌ " + (data.error || "فشل الحذف"), 'error');
+          }
+        } catch (e) { showToast("خطأ في الاتصال", 'error'); }
+      }, true);
     };
 
     const handleBlockUser = async (userId: number) => {
-      const mins = prompt("أدخل مدة الحظر بالدقائق (مثال: 60 = ساعة):");
-      if (!mins || isNaN(parseInt(mins))) return;
-      try {
-        const res = await adminFetch(`/api/admin/users/${userId}/block`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ minutes: parseInt(mins) })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          alert(`✅ تم حظر المستخدم لمدة ${mins} دقيقة`);
-          fetchAdminUsers();
-        } else {
-          alert("❌ " + (data.error || "فشل الحظر"));
-        }
-      } catch (e) { alert("خطأ في الاتصال"); }
+      showPromptDialog("أدخل مدة الحظر بالدقائق (مثال: 60 = ساعة):", "حظر المستخدم", async (mins) => {
+        if (!mins || isNaN(parseInt(mins))) return;
+        try {
+          const res = await adminFetch(`/api/admin/users/${userId}/block`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ minutes: parseInt(mins) })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            showToast(`✅ تم حظر المستخدم لمدة ${mins} دقيقة`, 'success');
+            fetchAdminUsers();
+          } else {
+            showToast("❌ " + (data.error || "فشل الحظر"), 'error');
+          }
+        } catch (e) { showToast("خطأ في الاتصال", 'error'); }
+      }, "", "مثال: 60");
     };
 
     const handleSendNotification = async (userId: number | null, title: string, body: string) => {
@@ -6599,11 +7514,11 @@ const AdminPanel = ({
         });
         const data = await res.json();
         if (res.ok) {
-          alert(userId ? "✅ تم إرسال الإشعار للمستخدم" : `✅ تم الإرسال لـ ${data.sent || "الكل"} مستخدم`);
+          showToast(userId ? "✅ تم إرسال الإشعار للمستخدم" : `✅ تم الإرسال لـ ${data.sent || "الكل"} مستخدم`, 'success');
         } else {
-          alert("❌ " + (data.error || "فشل الإرسال"));
+          showToast("❌ " + (data.error || "فشل الإرسال"), 'error');
         }
-      } catch (e) { alert("خطأ في الاتصال"); }
+      } catch (e) { showToast("خطأ في الاتصال", 'error'); }
     };
 
     const handleAddOffer = async () => {
@@ -6615,7 +7530,7 @@ const AdminPanel = ({
       if (res.ok) {
         setNewOffer({ title: "", description: "", image_url: "" });
         fetchOffers();
-        alert("تمت إضافة العرض");
+        showToast("تمت إضافة العرض", 'info');
       }
     };
 
@@ -6635,11 +7550,9 @@ const AdminPanel = ({
       } catch (e) { console.error(e); }
     };
 
-    const handleApproveTransaction = async (id: number, overrideAmount?: string) => {
+    const handleApproveTransaction = async (id: number, customAmount?: number) => {
       const body: any = {};
-      if (overrideAmount && parseFloat(overrideAmount) > 0) {
-        body.override_amount = parseFloat(overrideAmount);
-      }
+      if (customAmount !== undefined && customAmount > 0) body.custom_amount = customAmount;
       await adminFetch(`/api/admin/transactions/${id}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -6649,31 +7562,32 @@ const AdminPanel = ({
     };
 
     const handleRejectTransaction = async (id: number) => {
-      const reason = prompt("سبب الرفض (اختياري):");
-      if (reason === null) return; // المستخدم ضغط إلغاء
-      await adminFetch(`/api/admin/transactions/${id}/reject`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: reason.trim() || "" })
-      });
+      await adminFetch(`/api/admin/transactions/${id}/reject`, { method: "POST" });
       fetchAdminTransactions();
     };
 
     const handleAddCategory = async () => {
-      await adminFetch("/api/admin/categories", {
+      if (!newCategory.name || newCategory.name.trim().length < 1) {
+        return showToast("يرجى إدخال اسم القسم الرئيسي", 'error');
+      }
+      const res = await adminFetch("/api/admin/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newCategory)
       });
-      setNewCategory({ name: "", image_url: "", special_id: "" });
-      fetchCategories();
-      fetchCategories();
-        alert("✅ تمت إضافة القسم الرئيسي بنجاح");
+      const data = await res.json();
+      if (res.ok) {
+        setNewCategory({ name: "", image_url: "", special_id: "" });
+        fetchCategories();
+        showToast("✅ تمت إضافة القسم الرئيسي بنجاح", 'success');
+      } else {
+        showToast("❌ " + (data.error || "خطأ في الإضافة"), 'error');
+      }
     };
 
     const handleAddSubcategory = async () => {
-      if (!newSubcategory.name) return alert("يرجى إدخال اسم القسم الفرعي");
-      if (!newSubcategory.category_special_id) return alert("يرجى إدخال رقم القسم الرئيسي الخاص");
+      if (!newSubcategory.name) return showToast("يرجى إدخال اسم القسم الفرعي", 'error');
+      if (!newSubcategory.category_special_id) return showToast("يرجى إدخال رقم القسم الرئيسي الخاص", 'error');
       const res = await adminFetch("/api/admin/subcategories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -6684,9 +7598,9 @@ const AdminPanel = ({
         setNewSubcategory({ category_special_id: "", name: "", image_url: "", special_id: "" });
         fetchSubcategories();
         fetchCategories();
-        alert("✅ تمت إضافة القسم الفرعي بنجاح");
+        showToast("✅ تمت إضافة القسم الفرعي بنجاح", 'success');
       } else {
-        alert("❌ " + (data.error || "خطأ في الإضافة"));
+        showToast("❌ " + (data.error || "خطأ في الإضافة", 'error'));
       }
     };
 
@@ -6708,19 +7622,20 @@ const AdminPanel = ({
           requires_input: false, 
           store_type: "normal",
           min_quantity: "",
+          max_quantity: "",
           price_per_unit: "",
           external_id: ""
         });
-        alert("تمت إضافة المنتج");
+        showToast("تمت إضافة المنتج", 'info');
       } else {
         const data = await res.json();
-        alert(data.error || "خطأ في الإضافة");
+        showToast(data.error || "خطأ في الإضافة", 'error');
       }
     };
 
     const handleAddSubSubCategory = async () => {
-      if (!newSubSubCategory.name) return alert("يرجى إدخال اسم القسم الفرعي الفرعي");
-      if (!newSubSubCategory.subcategory_special_id) return alert("يرجى إدخال رقم القسم الفرعي الخاص");
+      if (!newSubSubCategory.name) return showToast("يرجى إدخال اسم القسم الفرعي الفرعي", 'error');
+      if (!newSubSubCategory.subcategory_special_id) return showToast("يرجى إدخال رقم القسم الفرعي الخاص", 'error');
       const res = await adminFetch("/api/admin/sub-sub-categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -6731,9 +7646,9 @@ const AdminPanel = ({
         setNewSubSubCategory({ subcategory_special_id: "", name: "", image_url: "", special_id: "" });
         fetchSubSubCategories();
         fetchSubcategories();
-        alert("✅ تمت إضافة القسم الفرعي الفرعي بنجاح");
+        showToast("✅ تمت إضافة القسم الفرعي الفرعي بنجاح", 'success');
       } else {
-        alert("❌ " + (data.error || "خطأ في الإضافة"));
+        showToast("❌ " + (data.error || "خطأ في الإضافة", 'error'));
       }
     };
 
@@ -6744,12 +7659,12 @@ const AdminPanel = ({
         body: JSON.stringify(newPaymentMethod)
       });
       if (res.ok) {
-        setNewPaymentMethod({ name: "", image_url: "", wallet_address: "", min_amount: "", instructions: "" });
+        setNewPaymentMethod({ name: "", image_url: "", wallet_address: "", min_amount: "", instructions: "", description: "", method_type: "manual", api_account: "" });
         fetchPaymentMethods();
-        alert("تمت إضافة طريقة الدفع");
+        showToast("تمت إضافة طريقة الدفع", 'info');
       } else {
         const data = await res.json();
-        alert(data.error || "خطأ في الإضافة");
+        showToast(data.error || "خطأ في الإضافة", 'error');
       }
     };
 
@@ -6762,29 +7677,33 @@ const AdminPanel = ({
       if (res.ok) {
         setNewBanner({ image_url: "" });
         fetchBanners();
-        alert("تمت إضافة الصورة المتحركة");
+        showToast("تمت إضافة الصورة المتحركة", 'info');
       } else {
-        alert("خطأ في الإضافة");
+        showToast("خطأ في الإضافة", 'error');
       }
     };
 
-    const handleDelete = async (type: string, id: number) => {
-      if (!confirm("هل أنت متأكد من الحذف؟")) return;
-      const res = await adminFetch(`/api/admin/${type}/${id}`, { method: "DELETE" });
-      const result = await res.json();
-      if (res.ok) {
-        // تحديث كل القوائم بعد الحذف
-        fetchCategories();
-        fetchSubcategories();
-        fetchSubSubCategories();
-        if (type === 'payment-methods') fetchPaymentMethods();
-        if (type === 'banners') fetchBanners();
-        if (type === 'offers') fetchOffers();
-        alert(result.message || "✅ تم الحذف بنجاح");
-      } else {
-        const errData = result;
-        alert("❌ " + (errData.error || "فشل الحذف"));
-      }
+    const handleDelete = async (type: string, id: number, onSuccess?: () => void) => {
+      showConfirm("هل أنت متأكد من الحذف؟", "تأكيد الحذف", async () => {
+        try {
+          const res = await adminFetch(`/api/admin/${type}/${id}`, { method: "DELETE" });
+          const result = await res.json();
+          if (res.ok) {
+            fetchCategories();
+            fetchSubcategories();
+            fetchSubSubCategories();
+            if (type === 'payment-methods') fetchPaymentMethods();
+            if (type === 'banners') fetchBanners();
+            if (type === 'offers') fetchOffers();
+            showToast(result.message || "✅ تم الحذف بنجاح", 'success');
+            if (onSuccess) onSuccess();
+          } else {
+            showToast("❌ " + (result.error || "فشل الحذف"), 'error');
+          }
+        } catch (e) {
+          showToast("❌ خطأ في الاتصال بالخادم", 'error');
+        }
+      }, true);
     };
 
     const handleManualTopup = async () => {
@@ -6795,10 +7714,10 @@ const AdminPanel = ({
       });
       if (res.ok) {
         setManualTopup({ userId: "", amount: "" });
-        alert("تم شحن الرصيد بنجاح");
+        showToast("تم شحن الرصيد بنجاح", 'success');
       } else {
         const data = await res.json();
-        alert(data.error || "خطأ في الشحن");
+        showToast(data.error || "خطأ في الشحن", 'error');
       }
     };
 
@@ -6841,23 +7760,6 @@ const AdminPanel = ({
                   <div className="flex gap-2">
                     <input type="text" value={supportWhatsapp} onChange={e => setSupportWhatsapp(e.target.value)} placeholder="رقم واتساب الدعم" className="flex-1 p-3 bg-white rounded-xl text-sm outline-none border border-gray-100" />
                     <button onClick={() => handleUpdateSetting('support_whatsapp', supportWhatsapp)} className="bg-blue-600 text-white px-4 rounded-xl text-sm font-bold">حفظ</button>
-                  </div>
-                </div>
-
-                {/* الشريط المتحرك */}
-                <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
-                  <h4 className="font-bold text-sm text-gray-700 flex items-center gap-2"><Zap size={15} className="text-yellow-500" />الشريط المتحرك</h4>
-                  <p className="text-xs text-gray-400">النص الذي يظهر متحركاً أسفل البانرات في الصفحة الرئيسية. اتركه فارغاً لإخفائه.</p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={tickerTextAdmin}
-                      onChange={e => setTickerTextAdmin(e.target.value)}
-                      placeholder="اكتب النص هنا..."
-                      className="flex-1 p-3 bg-white rounded-xl text-sm outline-none border border-gray-100"
-                      dir="rtl"
-                    />
-                    <button onClick={() => handleUpdateSetting('ticker_text', tickerTextAdmin)} className="bg-yellow-500 text-white px-4 rounded-xl text-sm font-bold">حفظ</button>
                   </div>
                 </div>
 
@@ -6919,13 +7821,13 @@ const AdminPanel = ({
           {adminTab === "chat" && <AdminChatView />}
 
           {/* ===== ORDERS ===== */}
-          {adminTab === "orders" && <AdminOrdersTab adminOrders={adminOrders} orderSearch={orderSearch} setOrderSearch={setOrderSearch} orderDateFilter={orderDateFilter} setOrderDateFilter={setOrderDateFilter} fetchAdminOrders={fetchAdminOrders} adminFetch={adminFetch} overridePlayerIds={overridePlayerIds} setOverridePlayerIds={setOverridePlayerIds} />}
+          {adminTab === "orders" && <AdminOrdersTab adminOrders={adminOrders} orderSearch={orderSearch} setOrderSearch={setOrderSearch} orderDateFilter={orderDateFilter} setOrderDateFilter={setOrderDateFilter} fetchAdminOrders={fetchAdminOrders} adminFetch={adminFetch} />}
 
           {/* ===== TRANSACTIONS ===== */}
           {adminTab === "transactions" && <AdminTransactionsTab adminTransactions={adminTransactions} transSearch={transSearch} setTransSearch={setTransSearch} handleApproveTransaction={handleApproveTransaction} handleRejectTransaction={handleRejectTransaction} />}
 
           {/* ===== ELEMENTS ===== */}
-          {adminTab === "elements" && <AdminElementsTab categories={categories} subcategories={subcategories} subSubCategories={subSubCategories} fetchCategories={fetchCategories} fetchSubcategories={fetchSubcategories} fetchSubSubCategories={fetchSubSubCategories} paymentMethods={paymentMethods} fetchPaymentMethods={fetchPaymentMethods} banners={banners} fetchBanners={fetchBanners} offers={offers} fetchOffers={fetchOffers} handleDelete={handleDelete} />}
+          {adminTab === "elements" && <AdminElementsTab categories={categories} subcategories={subcategories} subSubCategories={subSubCategories} fetchCategories={fetchCategories} fetchSubcategories={fetchSubcategories} fetchSubSubCategories={fetchSubSubCategories} paymentMethods={paymentMethods} fetchPaymentMethods={fetchPaymentMethods} banners={banners} fetchBanners={fetchBanners} offers={offers} fetchOffers={fetchOffers} handleDelete={handleDelete} adminFetch={adminFetch} />}
 
           {/* ===== AHMINIX ===== */}
           {adminTab === "ahminix" && (
@@ -6963,7 +7865,6 @@ const AdminPanel = ({
               { key:"add_voucher", label:"قسيمة", icon:<Ticket size={20}/>, color:"text-purple-600 bg-purple-50" },
               { key:"add_paymentMethod", label:"طريقة دفع", icon:<Plus size={20}/>, color:"text-orange-600 bg-orange-50" },
               { key:"add_notification", label:"إشعار", icon:<Bell size={20}/>, color:"text-red-600 bg-red-50" },
-              { key:"customize_ticker", label:"الشريط المتحرك", icon:<Zap size={20}/>, color:"text-yellow-600 bg-yellow-50" },
               { key:"customize_discounts", label:"تخصيص التخفيضات", icon:<Tag size={20}/>, color:"text-teal-600 bg-teal-50" },
               { key:"customize_rewards", label:"تخصيص المكافآت", icon:<Crown size={20}/>, color:"text-yellow-600 bg-yellow-50" },
               { key:"ahminix_link", label:"API خارجي", icon:<ExternalLink size={20}/>, color:"text-gray-600 bg-gray-100" },
@@ -7023,6 +7924,7 @@ const AdminPanel = ({
                     <AdminImageUpload label="صورة الطريقة" currentUrl={newPaymentMethod.image_url} onUpload={url => setNewPaymentMethod({...newPaymentMethod,image_url:url})}/>
                     <select className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={newPaymentMethod.method_type} onChange={e => setNewPaymentMethod({...newPaymentMethod,method_type:e.target.value,api_account:""})}><option value="manual">يدوي (إيصال)</option><option value="syriatel">سيريتل كاش</option><option value="shamcash">شام كاش</option></select>
                     <input type="text" placeholder="رقم المحفظة / العنوان" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={newPaymentMethod.wallet_address} onChange={e => setNewPaymentMethod({...newPaymentMethod,wallet_address:e.target.value})}/>
+                    <textarea placeholder="وصف طريقة الدفع (اختياري - يظهر للمستخدم)" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none h-16 resize-none" value={newPaymentMethod.description} onChange={e => setNewPaymentMethod({...newPaymentMethod,description:e.target.value})}/>
                     {(newPaymentMethod.method_type==="syriatel"||newPaymentMethod.method_type==="shamcash") && <input type="text" placeholder={newPaymentMethod.method_type==="syriatel"?"رقم GSM (0933xxxxxx)":"عنوان الحساب"} className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none font-mono" value={newPaymentMethod.api_account} onChange={e => setNewPaymentMethod({...newPaymentMethod,api_account:e.target.value})}/>}
                     <input type="number" placeholder="أقل مبلغ $" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={newPaymentMethod.min_amount} onChange={e => setNewPaymentMethod({...newPaymentMethod,min_amount:e.target.value})}/>
                     <button onClick={() => { handleAddPaymentMethod(); setActiveSubMenu(null); }} className="w-full bg-[var(--brand)] text-white py-3.5 rounded-2xl font-bold text-sm">إضافة طريقة الدفع</button>
@@ -7088,14 +7990,14 @@ const AdminPanel = ({
                             const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbKey}`, { method: "POST", body: formData });
                             const data = await res.json();
                             if (data.success) setNewProduct(p => ({...p, image_url: data.data.url}));
-                            else alert("فشل رفع الصورة");
-                          } catch { alert("خطأ في رفع الصورة"); }
+                            else showToast("فشل رفع الصورة", 'error');
+                          } catch { showToast("خطأ في رفع الصورة", 'error'); }
                         }}/>
                       </label>
                     </div>
                     {newProduct.image_url && (
                       <div className="mt-2 flex items-center gap-2">
-                        <img src={newProduct.image_url} className="w-12 h-12 object-cover rounded-lg border border-gray-100" referrerPolicy="no-referrer"/>
+                        <img loading="lazy" src={newProduct.image_url} className="w-12 h-12 object-cover rounded-lg border border-gray-100" referrerPolicy="no-referrer"/>
                         <button onClick={() => setNewProduct(p => ({...p, image_url: ""}))} className="text-xs text-red-500 bg-red-50 px-2 py-1 rounded-lg">حذف</button>
                       </div>
                     )}
@@ -7113,13 +8015,10 @@ const AdminPanel = ({
                   </div>
                   {/* السعر */}
                   {(newProduct.store_type === "quantities" || newProduct.store_type === "external_api") ? (
-                    <div className="space-y-2 p-3 bg-blue-50 rounded-xl border border-blue-100">
+                    <div className="space-y-2 p-3 bg-gray-50 rounded-xl">
                       <input type="number" placeholder="أقل كمية" className="w-full p-2 bg-white rounded-lg text-sm outline-none" value={newProduct.min_quantity} onChange={e => setNewProduct({...newProduct, min_quantity: e.target.value})}/>
-                      <div>
-                        <label className="text-[10px] font-bold text-blue-600 mb-1 block">سعر الوحدة $ (يُخزَّن بـ 7 خانات عشرية)</label>
-                        <input type="number" step="0.0000001" placeholder="مثال: 0.0012345" className="w-full p-2 bg-white rounded-lg text-sm outline-none border border-blue-200 font-mono" value={newProduct.price_per_unit} onChange={e => setNewProduct({...newProduct, price_per_unit: e.target.value})}/>
-                        {newProduct.price_per_unit && <p className="text-[10px] text-blue-500 mt-1">القيمة المخزونة: {parseFloat(newProduct.price_per_unit||"0").toFixed(7)}</p>}
-                      </div>
+                      <input type="number" placeholder="أكثر كمية" className="w-full p-2 bg-white rounded-lg text-sm outline-none" value={newProduct.max_quantity||""} onChange={e => setNewProduct({...newProduct, max_quantity: e.target.value})}/>
+                      <input type="number" step="0.000001" placeholder="سعر الوحدة $" className="w-full p-2 bg-white rounded-lg text-sm outline-none" value={newProduct.price_per_unit} onChange={e => setNewProduct({...newProduct, price_per_unit: e.target.value})}/>
                       {newProduct.store_type === "external_api" && (
                         <input type="text" placeholder="معرف المنتج الخارجي (external_id)" className="w-full p-2 bg-white rounded-lg text-sm outline-none border border-blue-100" value={newProduct.external_id} onChange={e => setNewProduct({...newProduct, external_id: e.target.value})}/>
                       )}
@@ -7127,7 +8026,7 @@ const AdminPanel = ({
                   ) : (
                     <div>
                       <label className="text-xs text-gray-500 mb-1 block">السعر $</label>
-                      <input type="number" step="0.0000001" placeholder="السعر $" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})}/>
+                      <input type="number" step="0.01" placeholder="السعر $" className="w-full p-3 bg-gray-50 rounded-xl text-sm outline-none" value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})}/>
                     </div>
                   )}
                   {/* يتطلب بيانات إضافية */}
@@ -7137,8 +8036,8 @@ const AdminPanel = ({
                   </div>
                   <button
                     onClick={async () => {
-                      if (!newProduct.name) return alert("يرجى إدخال اسم المنتج");
-                      if (!newProduct.subcategory_special_id) return alert("يرجى اختيار القسم الفرعي");
+                      if (!newProduct.name) return showToast("يرجى إدخال اسم المنتج", 'error');
+                      if (!newProduct.subcategory_special_id) return showToast("يرجى اختيار القسم الفرعي", 'error');
                       await handleAddProduct();
                       setActiveSubMenu(null);
                     }}
@@ -7183,19 +8082,19 @@ const AdminPanel = ({
                           const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbKey}`, { method: "POST", body: formData });
                           const data = await res.json();
                           if (data.success) setNewBanner({ image_url: data.data.url });
-                          else alert("فشل رفع الصورة");
-                        } catch { alert("خطأ في رفع الصورة"); }
+                          else showToast("فشل رفع الصورة", 'error');
+                        } catch { showToast("خطأ في رفع الصورة", 'error'); }
                       }}/>
                     </label>
                   </div>
                   {newBanner.image_url && (
                     <div className="mt-1">
-                      <img src={newBanner.image_url} className="w-full h-36 object-cover rounded-xl border border-gray-100" referrerPolicy="no-referrer"/>
+                      <img loading="lazy" src={newBanner.image_url} className="w-full h-36 object-cover rounded-xl border border-gray-100" referrerPolicy="no-referrer"/>
                     </div>
                   )}
                   <button
                     onClick={async () => {
-                      if (!newBanner.image_url) return alert("يرجى إضافة صورة البانر");
+                      if (!newBanner.image_url) return showToast("يرجى إضافة صورة البانر", 'error');
                       await handleAddBanner();
                       setActiveSubMenu(null);
                     }}
@@ -7240,13 +8139,13 @@ const AdminPanel = ({
                           const res = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbKey}`, { method: "POST", body: formData });
                           const data = await res.json();
                           if (data.success) setNewOffer(o => ({...o, image_url: data.data.url}));
-                          else alert("فشل رفع الصورة");
-                        } catch { alert("خطأ في رفع الصورة"); }
+                          else showToast("فشل رفع الصورة", 'error');
+                        } catch { showToast("خطأ في رفع الصورة", 'error'); }
                       }}/>
                     </label>
                   </div>
                   {newOffer.image_url && (
-                    <img src={newOffer.image_url} className="w-full h-36 object-cover rounded-xl border border-gray-100" referrerPolicy="no-referrer"/>
+                    <img loading="lazy" src={newOffer.image_url} className="w-full h-36 object-cover rounded-xl border border-gray-100" referrerPolicy="no-referrer"/>
                   )}
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">اسم العرض <span className="text-red-400">*</span></label>
@@ -7270,7 +8169,7 @@ const AdminPanel = ({
                   </div>
                   <button
                     onClick={async () => {
-                      if (!newOffer.title) return alert("يرجى إدخال اسم العرض");
+                      if (!newOffer.title) return showToast("يرجى إدخال اسم العرض", 'error');
                       await handleAddOffer();
                       setActiveSubMenu(null);
                     }}
@@ -7305,35 +8204,6 @@ const AdminPanel = ({
               onClose={() => setActiveSubMenu(null)}
               handleSendNotification={handleSendNotification}
             />
-          )}
-
-          {/* Customize Ticker Modal */}
-          {activeSubMenu === "customize_ticker" && (
-            <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="fixed inset-0 z-[60] bg-black/50 flex items-end justify-center" onClick={() => setActiveSubMenu(null)}>
-              <motion.div initial={{y:100,opacity:0}} animate={{y:0,opacity:1}} exit={{y:100,opacity:0}} className="bg-white w-full max-w-lg rounded-t-3xl p-6 space-y-4" onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-bold text-gray-800 flex items-center gap-2"><Zap size={18} className="text-yellow-500"/>تخصيص الشريط المتحرك</h3>
-                  <button onClick={() => setActiveSubMenu(null)} className="text-gray-400"><X size={22}/></button>
-                </div>
-                <p className="text-xs text-gray-400">النص الذي يظهر متحركاً أسفل البانرات. اتركه فارغاً لإخفاء الشريط.</p>
-                <textarea
-                  value={tickerTextAdmin}
-                  onChange={e => setTickerTextAdmin(e.target.value)}
-                  placeholder="اكتب نص الشريط المتحرك هنا..."
-                  className="w-full p-4 bg-gray-50 rounded-2xl text-sm outline-none h-24 resize-none border border-gray-100"
-                  dir="rtl"
-                />
-                <button
-                  onClick={async () => {
-                    await handleUpdateSetting('ticker_text', tickerTextAdmin);
-                    setActiveSubMenu(null);
-                  }}
-                  className="w-full bg-yellow-500 text-white py-3.5 rounded-2xl font-bold text-sm"
-                >
-                  حفظ الشريط المتحرك
-                </button>
-              </motion.div>
-            </motion.div>
           )}
 
           {/* Customize Discounts Modal */}
@@ -7459,7 +8329,7 @@ const AdminPanel = ({
                         await handleUpdateSetting('reward_goals', JSON.stringify(updatedGoals));
                         setEditingGoal(null);
                         setSavingReward(false);
-                        alert("✅ تم حفظ الهدف بنجاح");
+                        showToast("✅ تم حفظ الهدف بنجاح", 'success');
                       }} className="flex-1 bg-yellow-600 text-white py-3 rounded-xl text-sm font-bold disabled:opacity-50">
                         {savingReward ? "جاري الحفظ..." : "حفظ التعديلات"}
                       </button>
@@ -7493,7 +8363,7 @@ const AdminPanel = ({
                 className={`flex flex-col items-center gap-0.5 relative ${adminTab===item.tab?"text-[var(--brand)]":"text-gray-400"}`}>
                 {item.icon}
                 <span className="text-[9px] font-medium">{item.label}</span>
-                {item.badge > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-[var(--brand)] text-white text-[8px] font-bold rounded-full flex items-center justify-center">{item.badge}</span>}
+                {item.badge > 0 && <span className="absolute -top-1.5 -right-1.5 w-[18px] h-[18px] bg-[var(--brand)] text-white text-[8px] font-bold rounded-full flex items-center justify-center border-2 border-white z-10">{item.badge}</span>}
               </button>
             );
           })}
@@ -7503,27 +8373,31 @@ const AdminPanel = ({
   };
 
   if (isAdmin) return (
-    <AdminPanel 
-      user={user}
-      fetchUser={fetchUser}
-      categories={categories}
-      subcategories={subcategories}
-      subSubCategories={subSubCategories}
-      fetchCategories={fetchCategories}
-      fetchSubcategories={fetchSubcategories}
-      fetchSubSubCategories={fetchSubSubCategories}
-      paymentMethods={paymentMethods}
-      fetchPaymentMethods={fetchPaymentMethods}
-      banners={banners}
-      fetchBanners={fetchBanners}
-      offers={offers}
-      fetchOffers={fetchOffers}
-      setIsAdmin={setIsAdmin}
-      theme={theme}
-      adminTab={adminTab}
-      setAdminTab={setAdminTab}
-      setSiteSettings={setSiteSettings}
-    />
+    <>
+      <ToastContainer />
+      <CustomDialogContainer />
+      <AdminPanel 
+        user={user}
+        fetchUser={fetchUser}
+        categories={categories}
+        subcategories={subcategories}
+        subSubCategories={subSubCategories}
+        fetchCategories={fetchCategories}
+        fetchSubcategories={fetchSubcategories}
+        fetchSubSubCategories={fetchSubSubCategories}
+        paymentMethods={paymentMethods}
+        fetchPaymentMethods={fetchPaymentMethods}
+        banners={banners}
+        fetchBanners={fetchBanners}
+        offers={offers}
+        fetchOffers={fetchOffers}
+        setIsAdmin={setIsAdmin}
+        theme={theme}
+        adminTab={adminTab}
+        setAdminTab={setAdminTab}
+        setSiteSettings={setSiteSettings}
+      />
+    </>
   );
 
   return (
@@ -7577,6 +8451,8 @@ const AdminPanel = ({
                   <>
                     {view.type === "main" && <ProfileView />}
                     {view.type === "profile_details" && <ProfileDetailsView />}
+                    {view.type === "rewards_leaderboard" && <RewardsLeaderboardView />}
+                    {view.type === "leaderboard" && <LeaderboardView />}
                     {view.type === "payments" && <PaymentsView />}
                     {view.type === "edit_profile" && <EditProfileView />}
                     {view.type === "referral" && <ReferralView />}
@@ -7667,7 +8543,7 @@ const AdminPanel = ({
                   <button 
                     onClick={() => {
                       navigator.clipboard.writeText(linkingModal.code);
-                      alert("تم نسخ الكود");
+                      showToast("تم نسخ الكود", 'success');
                     }}
                     className="absolute -top-2 -right-2 bg-blue-600 text-white p-2 rounded-xl shadow-lg hover:bg-blue-700 transition-colors"
                     title="نسخ الكود"
@@ -7687,7 +8563,7 @@ const AdminPanel = ({
                 <div className="space-y-3 pt-2">
                   <button 
                     onClick={() => {
-                      window.open(`https://t.me/alazeazstore_bot?start=${linkingModal.code}`, '_blank')
+                      window.open(`https://t.me/alazeazstore_bot?start=${linkingModal.code}`, '_blank');
                     }}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-bold shadow-lg shadow-blue-100 dark:shadow-none flex items-center justify-center gap-2 transition-all active:scale-95"
                   >
@@ -7753,6 +8629,188 @@ const AdminPanel = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ===== LONG PRESS FAVORITE OVERLAY ===== */}
+      <AnimatePresence>
+        {longPressTarget && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center"
+            style={{ background: "rgba(0,0,0,0.45)" }}
+            onClick={() => setLongPressTarget(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 22 }}
+              className="bg-white rounded-2xl shadow-2xl p-5 mx-6 w-72 flex flex-col items-center gap-4"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* صورة العنصر */}
+              {longPressTarget._fav_image && (
+                <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-100">
+                  <img
+                    src={longPressTarget._fav_image}
+                    alt={longPressTarget._fav_label}
+                    className="w-full h-full object-cover"
+                    draggable={false}
+                    onDragStart={e => e.preventDefault()}
+                    onContextMenu={e => e.preventDefault()}
+                  />
+                </div>
+              )}
+              <p className="font-bold text-gray-800 text-center text-sm">{longPressTarget._fav_label}</p>
+
+              {isFavorite(longPressTarget._fav_key) ? (
+                <div className="flex flex-col items-center gap-2 w-full">
+                  <div className="flex items-center gap-1 text-yellow-500 font-bold text-sm">
+                    <Star size={16} fill="currentColor" />
+                    <span>موجود في المفضلة</span>
+                  </div>
+                  <button
+                    onClick={() => { removeFromFavorites(longPressTarget._fav_key); setLongPressTarget(null); }}
+                    className="w-full py-2.5 rounded-xl bg-red-50 text-red-500 font-bold text-sm"
+                  >
+                    إزالة من المفضلة
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => addToFavorites(longPressTarget)}
+                  className={`w-full py-3 rounded-xl ${theme.button} text-white font-bold text-sm flex items-center justify-center gap-2`}
+                >
+                  <Star size={16} fill="currentColor" />
+                  إضافة إلى المفضلة
+                </button>
+              )}
+
+              <button
+                onClick={() => setLongPressTarget(null)}
+                className="text-gray-400 text-sm"
+              >
+                إلغاء
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* ===== END LONG PRESS OVERLAY ===== */}
+
+      {/* ===== ONBOARDING TUTORIAL ===== */}
+      <AnimatePresence>
+        {showOnboarding && (() => {
+          const steps = [
+            {
+              icon: "⭐",
+              title: "إضافة التطبيقات للمفضلة",
+              desc: "لإضافة أي قسم أو منتج إلى المفضلة، اضغط عليه ضغطةً مطولة وستظهر لك قائمة الإضافة.",
+            },
+            {
+              icon: "💳",
+              title: "كيفية شحن رصيدك",
+              desc: "اذهب إلى تبويب «شحن» ← اختر طريقة الدفع ← انسخ عنوان الحساب ← حوّل المبلغ ← خذ لقطة شاشة للحوالة ← ارجع للموقع وأدخل المبلغ وارفع صورة الحوالة.",
+            },
+            {
+              icon: "🛍️",
+              title: "تتبع طلباتك",
+              desc: "بعد إتمام أي طلب، يمكنك متابعة حالته في تبويب «الطلبات» في الشريط السفلي.",
+            },
+            {
+              icon: "🔔",
+              title: "الإشعارات والدعم",
+              desc: "ستصلك إشعارات فورية عند تحديث حالة طلبك. وللتواصل مع الدعم الفني، اذهب إلى «حسابي» ← «تواصل معنا».",
+            },
+            {
+              icon: "🎁",
+              title: "نقاط المكافآت",
+              desc: "مع كل طلب تجمع نقاطاً يمكنك استبدالها بمكافآت ومزايا حصرية. تحقق من رصيد نقاطك في صفحة «حسابي».",
+            },
+          ];
+          const step = steps[onboardingStep];
+          const isLast = onboardingStep === steps.length - 1;
+          return (
+            <motion.div
+              key="onboarding-bg"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm flex items-end justify-center p-4 pb-8"
+            >
+              <motion.div
+                key={onboardingStep}
+                initial={{ opacity: 0, y: 60, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                transition={{ type: "spring", stiffness: 300, damping: 28 }}
+                className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden"
+              >
+                {/* Progress bar */}
+                <div className="h-1 bg-gray-100">
+                  <div
+                    className="h-full bg-brand transition-all duration-500 rounded-full"
+                    style={{ width: `${((onboardingStep + 1) / steps.length) * 100}%` }}
+                  />
+                </div>
+
+                <div className="p-7 text-center space-y-4" dir="rtl">
+                  {/* Icon */}
+                  <div className="w-20 h-20 bg-brand-light rounded-3xl flex items-center justify-center text-4xl mx-auto shadow-sm">
+                    {step.icon}
+                  </div>
+
+                  {/* Content */}
+                  <div className="space-y-2">
+                    <h3 className="text-xl font-bold text-gray-900">{step.title}</h3>
+                    <p className="text-gray-500 text-sm leading-relaxed">{step.desc}</p>
+                  </div>
+
+                  {/* Step dots */}
+                  <div className="flex justify-center gap-2 pt-1">
+                    {steps.map((_, i) => (
+                      <div
+                        key={i}
+                        className={`h-2 rounded-full transition-all duration-300 ${i === onboardingStep ? "w-6 bg-brand" : "w-2 bg-gray-200"}`}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Buttons */}
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      onClick={() => setShowOnboarding(false)}
+                      className="flex-1 py-3 rounded-2xl border border-gray-200 text-gray-400 text-sm font-bold active:scale-95 active:bg-[#B00000]/10 transition-all"
+                    >
+                      تخطي
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (isLast) {
+                          setShowOnboarding(false);
+                        } else {
+                          setOnboardingStep(s => s + 1);
+                        }
+                      }}
+                      className="flex-[2] py-3 rounded-2xl bg-brand text-white text-sm font-bold active:scale-95 active:opacity-80 transition-all shadow-lg shadow-brand-soft"
+                    >
+                      {isLast ? "ابدأ الآن 🎉" : "التالي"}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
+      {/* ===== END ONBOARDING TUTORIAL ===== */}
+
+      {/* ===== TOAST CONTAINER ===== */}
+      <ToastContainer />
+
+      {/* ===== CUSTOM DIALOG CONTAINER ===== */}
+      <CustomDialogContainer />
     </div>
   );
 }
