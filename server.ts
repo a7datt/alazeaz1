@@ -164,12 +164,14 @@ async function processBotOrder(chatId: number, user: any, product: any, price: n
 
     if (orderErr) throw orderErr;
 
+    // حفظ سعر التكلفة لحظة الشراء لضمان صحة حساب الأرباح لاحقاً
+    const botCostPrice = parseFloat(String(product.price_per_unit || 0)) || 0;
     await supabase.from("order_items").insert({
       order_id: order.id,
       product_id: product.id,
       price_at_purchase: product.price,
       quantity: 1,
-      extra_data: JSON.stringify(extraData)
+      extra_data: JSON.stringify({ ...extraData, cost_price: botCostPrice })
     });
 
     await supabase.from("users").update({ balance: user.balance - price }).eq("id", user.id);
@@ -241,7 +243,7 @@ async function verifyShamCashTx(txNumber: string, accountAddress: string): Promi
 }
 
 // =================== AHMINIX API HELPERS ===================
-const AHMINIX_BASE = "https://api.shams4store.com/client/api/";
+const AHMINIX_BASE = "https://fastcard1.store/client/api";
 const AHMINIX_TOKEN = process.env.AHMINIX_API_TOKEN || "";
 if (!AHMINIX_TOKEN) console.warn("[SECURITY] ⚠️  AHMINIX_API_TOKEN غير مضبوط في .env");
 
@@ -260,8 +262,13 @@ function generateUUIDv4(): string {
 // EMAIL / OTP HELPERS (Resend API)
 // ============================================================
 const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
-const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@alaziz.sy";
+const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@alazeaz-store.sy";
 const STORE_NAME = process.env.STORE_NAME || "العزيز";
+
+// --- Google OAuth Configuration ---
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
+if (!GOOGLE_CLIENT_ID) console.warn("[GOOGLE] GOOGLE_CLIENT_ID غير مضبوط في .env");
 
 // [FIX] استخدام crypto.randomInt بدلاً من Math.random
 // Math.random() ليس CSPRNG ولا يُستخدم لأغراض أمنية
@@ -443,80 +450,83 @@ async function ahminixCheckOrder(orderId: string, isUuid = false): Promise<any> 
 
 /**
  * يُحوّل حالة Ahminix الخام إلى حالة داخلية
- * نعتمد قائمة واسعة من الكلمات، لكن أي حالة غير مؤكدة تبقى processing
+ * API قد يُرجع: "accept"/"completed" → completed | "reject"/"rejected"/"cancelled" → cancelled | غير ذلك → processing
  */
-const AHMINIX_ACCEPT_STATUS_WORDS = [
-  "accept", "accepted", "accepts", "approved", "approve", "completed", "complete", "completion",
-  "done", "success", "successful", "succeeded", "finish", "finished", "delivered", "delivered_successfully"
-];
+/**
+ * normalizeOrderStatus — تطبيع حالة الطلب بصرامة
+ * أي حالة غامضة أو غير صريحة = processing (لا نحكم بالرفض إلا بتأكيد مزدوج)
+ */
+function normalizeOrderStatus(apiStatus: string): "completed" | "cancelled" | "processing" {
+  const s = (apiStatus || "").toLowerCase().trim();
+  if (!s) return "processing";
 
-const AHMINIX_REJECT_STATUS_WORDS = [
-  "reject", "rejected", "rejects", "declined", "denied", "refused", "cancel", "cancelled", "canceled",
-  "failed", "failure", "fail", "aborted", "terminated", "void", "not_approved", "invalid", "blocked"
-];
+  const acceptedKeywords = ["accept","accepted","completed","done","success","approved","finish","finished","delivered"];
+  const rejectedKeywords = ["reject","rejected","cancel","cancelled","failed","error","denied","declined","refused"];
 
-function normalizeAhminixStatusValue(apiStatus: any): string {
-  return String(apiStatus ?? "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
+  // قبول: أي كلمة من القائمة كافية
+  if (acceptedKeywords.some(k => s.includes(k))) return "completed";
 
-function statusMatchesAny(apiStatus: any, words: string[]): boolean {
-  const s = normalizeAhminixStatusValue(apiStatus);
-  if (!s) return false;
-  return words.some((word) => {
-    const w = normalizeAhminixStatusValue(word);
-    return s === w || s.startsWith(`${w}_`) || s.endsWith(`_${w}`) || s.includes(`_${w}_`);
-  });
-}
+  // رفض: يجب أن تكون واضحة وصريحة
+  if (rejectedKeywords.some(k => s.includes(k))) return "cancelled";
 
-function isAhminixAcceptedStatus(apiStatus: any): boolean {
-  return statusMatchesAny(apiStatus, AHMINIX_ACCEPT_STATUS_WORDS);
-}
-
-function isAhminixRejectedStatus(apiStatus: any): boolean {
-  return statusMatchesAny(apiStatus, AHMINIX_REJECT_STATUS_WORDS);
-}
-
-function mapAhminixStatus(apiStatus: string): "completed" | "cancelled" | "processing" {
-  if (isAhminixAcceptedStatus(apiStatus)) return "completed";
-  if (isAhminixRejectedStatus(apiStatus)) return "cancelled";
+  // أي حالة غير معروفة = قيد المعالجة (لا نحكم بالرفض)
   return "processing";
 }
 
+/** للتوافق مع الاستدعاءات القديمة */
+const mapAhminixStatus = normalizeOrderStatus;
+
 /**
- * هل الحالة الخام نهائية (مكتملة أو مرفوضة)؟
+ * هل الحالة الخام نهائية (مكتملة أو مرفوضة بتأكيد)؟
  */
 function isAhminixFinalStatus(apiStatus: string): boolean {
-  return isAhminixAcceptedStatus(apiStatus) || isAhminixRejectedStatus(apiStatus);
+  const status = normalizeOrderStatus(apiStatus);
+  return status === "completed" || status === "cancelled";
 }
 
-async function fetchAhminixOrderSnapshot(ahminixId?: string | null, ahminixUuid?: string | null): Promise<any | null> {
-  let checkRes: any = null;
-  if (ahminixUuid && ahminixUuid !== String(ahminixId || "")) {
-    checkRes = await ahminixCheckOrder(ahminixUuid, true);
-    if (checkRes?.status !== "OK" || !checkRes?.data?.[0]) checkRes = null;
+/**
+ * getFinalOrderStatus — يحاول 3 مرات قبل الحكم بالرفض
+ * إذا كانت النتيجة "cancelled" يتحقق مرة إضافية قبل اعتمادها
+ */
+async function getFinalOrderStatus(
+  checkFn: () => Promise<any>,
+  maxAttempts = 3,
+  delayMs = 2000
+): Promise<{ status: "completed" | "cancelled" | "processing"; raw: string; data: any }> {
+  let lastRaw = "";
+  let lastData: any = null;
+
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const res = await checkFn();
+      const ext = res?.data?.[0];
+      if (!ext) {
+        if (i < maxAttempts - 1) { await new Promise(r => setTimeout(r, delayMs)); continue; }
+        return { status: "processing", raw: "", data: null };
+      }
+      lastRaw = ext.status || "";
+      lastData = ext;
+      const normalized = normalizeOrderStatus(lastRaw);
+
+      // قبول → نخرج فوراً
+      if (normalized === "completed") return { status: "completed", raw: lastRaw, data: ext };
+
+      // قيد المعالجة → نحاول مرة أخرى
+      if (normalized === "processing") {
+        if (i < maxAttempts - 1) { await new Promise(r => setTimeout(r, delayMs)); continue; }
+        return { status: "processing", raw: lastRaw, data: ext };
+      }
+
+      // مرفوض → لا نؤكد إلا في المحاولة الأخيرة
+      if (normalized === "cancelled") {
+        if (i < maxAttempts - 1) { await new Promise(r => setTimeout(r, delayMs)); continue; }
+        return { status: "cancelled", raw: lastRaw, data: ext };
+      }
+    } catch {
+      if (i < maxAttempts - 1) { await new Promise(r => setTimeout(r, delayMs)); continue; }
+    }
   }
-  if (!checkRes && ahminixId) {
-    const isUuid = String(ahminixId).includes("-");
-    checkRes = await ahminixCheckOrder(ahminixId, isUuid);
-    if (checkRes?.status !== "OK" || !checkRes?.data?.[0]) checkRes = null;
-  }
-  return checkRes?.data?.[0] || null;
-}
-
-async function confirmAhminixRejectedStatus(ahminixId?: string | null, ahminixUuid?: string | null): Promise<any | null> {
-  const first = await fetchAhminixOrderSnapshot(ahminixId, ahminixUuid);
-  if (!first) return null;
-  if (!isAhminixRejectedStatus(first.status)) return first;
-
-  await new Promise((resolve) => setTimeout(resolve, 1200));
-
-  const second = await fetchAhminixOrderSnapshot(ahminixId, ahminixUuid);
-  if (!second) return null;
-  return isAhminixRejectedStatus(second.status) ? second : null;
+  return { status: "processing", raw: lastRaw, data: lastData };
 }
 
 /**
@@ -525,6 +535,49 @@ async function confirmAhminixRejectedStatus(ahminixId?: string | null, ahminixUu
 async function ahminixGetProducts(): Promise<any[]> {
   const data = await ahminixGet("/products");
   return Array.isArray(data) ? data : [];
+}
+
+// ============================================================
+// خريطة منع الطلبات المكررة: key = "userId-productId-qty-playerId"
+// نحتفظ بالطلب لمدة 10 ثوانٍ لرفض أي طلب مطابق في تلك المدة
+// ============================================================
+const recentOrdersMap = new Map<string, number>();
+function isDuplicateOrder(userId: string, productId: string, qty: number, playerId: string): boolean {
+  const key = `${userId}-${productId}-${qty}-${playerId}`;
+  const last = recentOrdersMap.get(key);
+  const now = Date.now();
+  if (last && now - last < 10_000) return true; // مكرر خلال 10 ثوانٍ
+  recentOrdersMap.set(key, now);
+  // تنظيف المدخلات القديمة تلقائياً
+  if (recentOrdersMap.size > 500) {
+    for (const [k, t] of recentOrdersMap.entries()) {
+      if (now - t > 10_000) recentOrdersMap.delete(k);
+    }
+  }
+  return false;
+}
+
+/**
+ * يتحقق من حالة الحظر المؤقت للمستخدم ويرفع الحظر تلقائياً إذا انتهت المدة
+ * يُرجع true إذا كان المستخدم محظوراً الآن
+ */
+async function checkAndClearBan(user: any): Promise<{ banned: boolean; message?: string }> {
+  if (!user.is_banned && !user.blocked_until) return { banned: false };
+  const now = new Date();
+  if (user.blocked_until) {
+    const until = new Date(user.blocked_until);
+    if (until <= now) {
+      // الحظر انتهى — نرفعه تلقائياً
+      await supabase.from("users").update({ is_banned: false, blocked_until: null }).eq("id", user.id);
+      return { banned: false };
+    }
+    const remaining = Math.ceil((until.getTime() - now.getTime()) / 60000);
+    return { banned: true, message: `تم إيقاف حسابك مؤقتاً. المتبقي: ${remaining} دقيقة.` };
+  }
+  if (user.is_banned) {
+    return { banned: true, message: "تم إيقاف حسابك. تواصل مع الدعم." };
+  }
+  return { banned: false };
 }
 
 /**
@@ -630,6 +683,78 @@ async function startServer() {
       const { data, error } = await query.order("id", { ascending: false });
       if (error) throw error;
       res.json(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      safeError(res, e);
+    }
+  });
+
+  // ===== أكثر المنتجات شراءً (شروط صارمة: طلبات مكتملة فقط، عدد الطلبات لا الكميات) =====
+  app.get("/api/most-purchased", authenticate, async (req, res) => {
+    try {
+      // جلب order_items المرتبطة بطلبات مكتملة فقط
+      // نجلب order_id لنعدّ الطلبات الفريدة لا الكميات (تفادياً لمنتجات الكمية الكبيرة)
+      const { data: items, error: itemsErr } = await supabase
+        .from("order_items")
+        .select("product_id, order_id, orders!inner(status)")
+        .eq("orders.status", "completed");
+
+      if (itemsErr) throw itemsErr;
+
+      // نعدّ عدد الطلبات الفريدة لكل منتج (ليس الكميات)
+      // هذا يمنع ظهور منتجات الكمية الكبيرة (مثل 4,900,000 وحدة من طلب واحد) بأرقام مضخّمة
+      const orderCountMap = new Map<number, Set<number>>();
+      for (const item of (items || [])) {
+        const pid = Number(item.product_id);
+        const oid = Number(item.order_id);
+        if (!pid || !oid) continue;
+        if (!orderCountMap.has(pid)) orderCountMap.set(pid, new Set());
+        orderCountMap.get(pid)!.add(oid);
+      }
+
+      if (orderCountMap.size === 0) return res.json([]);
+
+      // تحويل إلى عدد الطلبات الفريدة، مع شرط: على الأقل طلبَين مكتملَين
+      const countEntries: [number, number][] = [];
+      for (const [pid, orderSet] of orderCountMap.entries()) {
+        const orderCount = orderSet.size;
+        if (orderCount >= 2) { // شرط صارم: لا يظهر منتج اشتراه شخص واحد فقط
+          countEntries.push([pid, orderCount]);
+        }
+      }
+
+      if (countEntries.length === 0) return res.json([]);
+
+      // ترتيب تنازلياً وأخذ أكثر 9 منتجاً
+      const sorted = countEntries
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 9);
+
+      const ids = sorted.map(([id]) => id);
+
+      // جلب تفاصيل المنتجات — شروط صارمة: متاح + سعر > 0
+      const { data: prods, error: prodsErr } = await supabase
+        .from("products")
+        .select("id, name, price, price_per_unit, image_url, store_type")
+        .in("id", ids)
+        .eq("available", true);
+
+      if (prodsErr) throw prodsErr;
+
+      // دمج البيانات مع تصفية المنتجات التي سعرها 0
+      const prodMap = new Map((prods || []).map((p: any) => [Number(p.id), p]));
+      const result = sorted
+        .map(([id, count]) => {
+          const prod = prodMap.get(id);
+          if (!prod) return null;
+          // شرط صارم: يجب أن يكون للمنتج سعر حقيقي > 0
+          const effectivePrice = parseFloat(String(prod.price || 0));
+          const effectivePpu  = parseFloat(String(prod.price_per_unit || 0));
+          if (effectivePrice <= 0 && effectivePpu <= 0) return null;
+          return { ...prod, purchase_count: count }; // purchase_count = عدد الطلبات الفريدة المكتملة
+        })
+        .filter(Boolean);
+
+      res.json(result);
     } catch (e: any) {
       safeError(res, e);
     }
@@ -882,6 +1007,164 @@ async function startServer() {
     }
   });
 
+  // =================== GOOGLE OAUTH ===================
+  app.post("/api/auth/google", authLimiter, async (req, res) => {
+    const { credential, accessToken, googleId: directGoogleId, email: directEmail, name: directName, picture: directPicture } = req.body;
+
+    if (!GOOGLE_CLIENT_ID) {
+      return res.status(503).json({ error: "تسجيل الدخول عبر Google غير مفعّل" });
+    }
+
+    let googleId: string, email: string, name: string, avatarUrl: string | null;
+
+    try {
+      if (accessToken && typeof accessToken === "string") {
+        // ── مسار OAuth2 Token (الجديد) ─────────────────────────
+        // التحقق من الـ access_token عبر userinfo
+        const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        if (!userInfoRes.ok) {
+          return res.status(401).json({ error: "رمز Google غير صالح" });
+        }
+        const userInfo: any = await userInfoRes.json();
+        if (!userInfo.sub || !userInfo.email) {
+          return res.status(401).json({ error: "بيانات Google ناقصة" });
+        }
+        googleId  = userInfo.sub;
+        email     = (userInfo.email || "").toLowerCase().trim();
+        name      = userInfo.name || directName || email.split("@")[0];
+        avatarUrl = userInfo.picture || directPicture || null;
+
+      } else if (credential && typeof credential === "string") {
+        // ── مسار ID Token (القديم — نبقيه للتوافق) ────────────
+        const tokenInfoRes = await fetch(
+          `https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`
+        );
+        if (!tokenInfoRes.ok) {
+          return res.status(401).json({ error: "رمز Google غير صالح" });
+        }
+        const tokenInfo: any = await tokenInfoRes.json();
+        if (tokenInfo.aud !== GOOGLE_CLIENT_ID) {
+          return res.status(401).json({ error: "رمز Google غير مخصص لهذا التطبيق" });
+        }
+        if (!tokenInfo.sub || !tokenInfo.email) {
+          return res.status(401).json({ error: "بيانات Google ناقصة" });
+        }
+        googleId  = tokenInfo.sub;
+        email     = (tokenInfo.email || "").toLowerCase().trim();
+        name      = tokenInfo.name || tokenInfo.email.split("@")[0];
+        avatarUrl = tokenInfo.picture || null;
+
+      } else {
+        return res.status(400).json({ error: "بيانات Google غير صحيحة" });
+      }
+
+      // Check if user already exists with this google_id
+      let { data: existingByGoogle } = await supabase
+        .from("users")
+        .select("*")
+        .eq("google_id", googleId)
+        .single();
+
+      if (existingByGoogle) {
+        // User exists via Google - login directly
+        const banCheckGoogle = await checkAndClearBan(existingByGoogle);
+        if (banCheckGoogle.banned) {
+          return res.status(403).json({ error: banCheckGoogle.message });
+        }
+        // Update last login stats
+        const today = new Date().toISOString().split("T")[0];
+        const { data: stats } = await supabase
+          .from("user_stats")
+          .select("last_login_date, login_days_count")
+          .eq("user_id", existingByGoogle.id)
+          .single();
+        if (stats && stats.last_login_date !== today) {
+          await supabase.from("user_stats")
+            .update({ last_login_date: today, login_days_count: (stats.login_days_count || 0) + 1 })
+            .eq("user_id", existingByGoogle.id);
+        }
+        const { password_hash: _ph, ...userWithoutPass } = existingByGoogle;
+        let { data: fullStats } = await supabase.from("user_stats").select("*").eq("user_id", existingByGoogle.id).single();
+        if (!fullStats) {
+          await supabase.from("user_stats").insert({ user_id: existingByGoogle.id });
+          const { data: ns } = await supabase.from("user_stats").select("*").eq("user_id", existingByGoogle.id).single();
+          fullStats = ns;
+        }
+        const token = createUserToken(existingByGoogle.id);
+        return res.json({ ...userWithoutPass, stats: fullStats, token, isNew: false });
+      }
+
+      // Check if email already registered (without Google)
+      let { data: existingByEmail } = await supabase
+        .from("users")
+        .select("*")
+        .eq("email", email)
+        .single();
+
+      let userId: number;
+      let isNew = false;
+
+      if (existingByEmail) {
+        // Link Google to existing account
+        await supabase.from("users").update({
+          google_id: googleId,
+          auth_provider: "google",
+          is_verified: true,
+          avatar_url: existingByEmail.avatar_url || avatarUrl
+        }).eq("id", existingByEmail.id);
+        userId = existingByEmail.id;
+
+        // Refresh user data
+        const { data: updatedUser } = await supabase.from("users").select("*").eq("id", userId).single();
+        existingByEmail = updatedUser;
+      } else {
+        // Create new user via Google
+        const { data: newUser, error: createErr } = await supabase.from("users").insert({
+          name: sanitizeText(name, 60),
+          email,
+          google_id: googleId,
+          auth_provider: "google",
+          is_verified: true,
+          avatar_url: avatarUrl,
+          balance: 0
+        }).select("*").single();
+
+        if (createErr) throw createErr;
+
+        await supabase.from("user_stats").insert({ user_id: newUser.id });
+        userId = newUser.id;
+        isNew = true;
+
+        sendTelegramMessage(`👤 مستخدم جديد (Google)\\nالاسم: ${name}\\nالإيميل: ${email}`);
+      }
+
+      // Fetch final user data
+      const { data: finalUser } = await supabase.from("users").select("*").eq("id", userId).single();
+      if (!finalUser) return res.status(500).json({ error: "خطأ في جلب بيانات المستخدم" });
+
+      const banCheckFinal = await checkAndClearBan(finalUser);
+      if (banCheckFinal.banned) {
+        return res.status(403).json({ error: banCheckFinal.message });
+      }
+
+      const { password_hash: _ph2, ...userWithoutPass2 } = finalUser;
+      let { data: userStats } = await supabase.from("user_stats").select("*").eq("user_id", userId).single();
+      if (!userStats) {
+        await supabase.from("user_stats").insert({ user_id: userId });
+        const { data: ns2 } = await supabase.from("user_stats").select("*").eq("user_id", userId).single();
+        userStats = ns2;
+      }
+
+      const token = createUserToken(userId);
+      return res.json({ ...userWithoutPass2, stats: userStats, token, isNew });
+    } catch (e: any) {
+      console.error("[GOOGLE AUTH] Error:", e.message);
+      safeError(res, e);
+    }
+  });
+
   app.post("/api/auth/login", authLimiter, async (req, res) => {
     const { email, password } = req.body;
     if (!isValidEmail(email) || typeof password !== "string" || password.length < 1) {
@@ -897,7 +1180,8 @@ async function startServer() {
     const { data: user } = await supabase.from("users").select("*").eq("email", email.toLowerCase().trim()).single();
 
     if (user) {
-      if (user.is_banned) return res.status(403).json({ error: "تم إيقاف حسابك. تواصل مع الدعم." });
+      const banCheck1 = await checkAndClearBan(user);
+      if (banCheck1.banned) return res.status(403).json({ error: banCheck1.message });
       if (!user.is_verified) return res.status(403).json({ error: "يجب تفعيل حسابك أولاً عبر البريد الإلكتروني", requiresVerification: true, email: user.email });
       const isMatch = await bcrypt.compare(password, user.password_hash);
       if (isMatch) {
@@ -1166,26 +1450,38 @@ async function startServer() {
       // Validation
       if (!isValidId(productId))   return res.status(400).json({ error: "معرف المنتج غير صحيح" });
       const safeQty = Math.floor(Number(quantity));
-      if (!isValidQuantity(safeQty, 100)) return res.status(400).json({ error: "الكمية يجب أن تكون بين 1 و 100" });
-      // use safeQty below instead of quantity
+      if (!Number.isInteger(safeQty) || safeQty < 1) return res.status(400).json({ error: "الكمية غير صحيحة" });
 
       const { data: user, error: uErr } = await supabase.from("users").select("*").eq("id", userId).single();
       if (uErr) throw uErr;
       const { data: product, error: pErr } = await supabase.from("products").select("*").eq("id", productId).single();
       if (pErr) throw pErr;
 
-      if (!user || !product) return res.status(404).json({ error: "Not found" });
-      // تحقق من أن المستخدم لم يُحظر
-      if (user.is_banned || user.is_blocked) {
-        logSecurityEvent("banned-user-order", req, `userId:${userId}`);
-        return res.status(403).json({ error: "حسابك موقوف" });
+      // التحقق من الكمية باستخدام حدود المنتج الفعلية
+      const productMaxQty = product?.max_quantity || 100_000;
+      const productMinQty = product?.min_quantity || 1;
+      if (safeQty < productMinQty) return res.status(400).json({ error: `أقل كمية مسموح بها: ${productMinQty}` });
+      if (safeQty > productMaxQty) return res.status(400).json({ error: `أكبر كمية مسموح بها: ${productMaxQty}` });
+
+      // فحص الطلبات المكررة (نفس البيانات خلال 10 ثوانٍ)
+      const playerIdForDedup = (extraData?.playerId || extraData?.input || "").toString().trim();
+      if (isDuplicateOrder(String(userId), String(productId), safeQty, playerIdForDedup)) {
+        return res.status(429).json({ error: "طلب مكرر — يرجى الانتظار قليلاً قبل المحاولة مجدداً" });
       }
 
-      // حساب السعر الصحيح حسب نوع المتجر - الكمية × سعر الوحدة (دقة 7 خانات عشرية)
-      const unitPrice = product.store_type === 'quantities' || product.store_type === 'external_api'
-        ? (Number(Number(String(product.price_per_unit || product.price || 0)).toFixed(7)))
-        : (Number(Number(String(product.price || 0)).toFixed(7)));
-      let total = parseFloat((unitPrice * (Number(quantity) || 1)).toFixed(7));
+      if (!user || !product) return res.status(404).json({ error: "Not found" });
+      // تحقق من أن المستخدم لم يُحظر
+      const banCheckOrder = await checkAndClearBan(user);
+      if (banCheckOrder.banned || user.is_blocked) {
+        logSecurityEvent("banned-user-order", req, `userId:${userId}`);
+        return res.status(403).json({ error: banCheckOrder.message || "حسابك موقوف" });
+      }
+
+      // حساب السعر الصحيح حسب نوع المتجر
+      // price = سعر البيع النهائي (سعر API + نسبة الربح) — يُستخدم دائماً
+      // price_per_unit = سعر التكلفة من API فقط (للإحصاء والتقارير)
+      const unitPrice = parseFloat(product.price) || 0;
+      let total = unitPrice * (Number(quantity) || 1);
 
       const { data: stats } = await supabase.from("user_stats").select("*").eq("user_id", userId).single();
       const { data: vipDiscountSetting } = await supabase.from("settings").select("value").eq("key", "vip_discount").single();
@@ -1295,19 +1591,7 @@ async function startServer() {
       // تحديد حالة الطلب بناءً على الوضع والنتيجة
       let initialStatus: string;
       if (hasExternalId && orderMode === 'auto') {
-        if (isAhminixAcceptedStatus(ahminixOrderStatus)) {
-          initialStatus = 'completed';
-        } else {
-          const confirmedRejected = await confirmAhminixRejectedStatus(ahminixOrderId, ahminixOrderUuid);
-          if (confirmedRejected) {
-            ahminixOrderStatus = confirmedRejected.status || ahminixOrderStatus;
-            ahminixReplayApi = normalizeReplayApi(confirmedRejected.replay_api);
-            initialStatus = 'failed';
-          } else {
-            ahminixOrderStatus = 'processing';
-            initialStatus = 'processing';
-          }
-        }
+        initialStatus = ahminixOrderStatus === 'accept' ? 'completed' : 'processing';
       } else if (hasExternalId && orderMode === 'manual') {
         initialStatus = 'pending_admin';
       } else if (product.store_type === 'external_api') {
@@ -1317,10 +1601,13 @@ async function startServer() {
       }
 
       // حفظ الطلب في قاعدة البيانات المحلية
+      // cost_price: سعر التكلفة لحظة الشراء — يُحفظ هنا ليُستخدم في حساب الأرباح حتى لو تغيّر لاحقاً
+      const snapshotCostPrice = parseFloat(String(product.price_per_unit || 0)) || 0;
       const metaData: any = {
         ...extraData,
         order_mode: orderMode,
         product_name: product.name,
+        cost_price: snapshotCostPrice,
         ...(ahminixOrderId ? {
           ahminix_order_id: ahminixOrderId,
           ahminix_order_uuid: ahminixOrderUuid || ahminixOrderId,
@@ -1367,7 +1654,7 @@ async function startServer() {
       }
 
       // إشعار فوري للمستخدم إذا تم قبول الطلب لحظياً
-      if (isAhminixAcceptedStatus(ahminixOrderStatus) && ahminixReplayApi?.length > 0) {
+      if (ahminixOrderStatus === 'accept' && ahminixReplayApi?.length > 0) {
         const { data: userTg } = await supabase.from("users").select("telegram_chat_id").eq("id", userId).single();
         if (userTg?.telegram_chat_id && userBot) {
           const codes = ahminixReplayApi.filter(Boolean);
@@ -1385,9 +1672,7 @@ async function startServer() {
         pendingAdmin: initialStatus === 'pending_admin',
         ...(ahminixOrderId ? {
           externalOrderId: ahminixOrderId,
-          externalStatus: isAhminixAcceptedStatus(ahminixOrderStatus)
-            ? (ahminixOrderStatus || 'completed')
-            : (initialStatus === 'failed' ? (ahminixOrderStatus || 'rejected') : 'processing'),
+          externalStatus: ahminixOrderStatus,
           replayApi: ahminixReplayApi
         } : {})
       });
@@ -1425,67 +1710,58 @@ async function startServer() {
       const ahminixId   = meta.ahminix_order_id;
       const ahminixUuid = meta.ahminix_order_uuid;
 
-      const ext = await fetchAhminixOrderSnapshot(ahminixId, ahminixUuid);
+      // دالة الجلب مع fallback UUID → numeric
+      const doCheck = async () => {
+        let r: any = null;
+        if (ahminixUuid && ahminixUuid !== ahminixId) {
+          r = await ahminixCheckOrder(ahminixUuid, true);
+          if (r?.status !== "OK" || !r?.data?.[0]) r = null;
+        }
+        if (!r && ahminixId) {
+          r = await ahminixCheckOrder(ahminixId, String(ahminixId).includes("-"));
+        }
+        return r;
+      };
+
+      // استخدام getFinalOrderStatus مع إعادة محاولة قبل الحكم بالرفض
+      const { status: newStatus, raw: rawStatus, data: ext } = await getFinalOrderStatus(doCheck, 3, 1500);
+
       if (!ext) return res.json({ status: "processing", replay_api: [] });
 
       const normalizedReplay = normalizeReplayApi(ext.replay_api);
 
-      // إذا اكتمل أو تأكد الرفض → حدّث قاعدة البيانات
-      if (isAhminixAcceptedStatus(ext.status)) {
+      // تحديث DB فقط إذا الحالة نهائية
+      if (newStatus === "completed" || newStatus === "cancelled") {
         const updatedMeta = {
           ...meta,
-          ahminix_status: ext.status,
+          ahminix_status: rawStatus,
           ahminix_replay: normalizedReplay,
           completed_at: new Date().toISOString()
         };
         await supabase.from("orders").update({
-          status: "completed",
+          status: newStatus,
           meta: JSON.stringify(updatedMeta)
         }).eq("id", matchOrder.id);
 
-        const notifTitle = "✅ تم تنفيذ طلبك!";
-        const notifBody = `تم تنفيذ طلب ${meta?.product_name || ""} بنجاح`;
-        await sendPushNotification(String(userId), notifTitle, notifBody, "/");
-        await supabase.from("notifications").insert({
-          user_id: userId, title: notifTitle, message: notifBody,
-          type: "success"
-        });
-      } else {
-        const confirmedRejected = isAhminixRejectedStatus(ext.status)
-          ? await confirmAhminixRejectedStatus(ahminixId, ahminixUuid)
-          : null;
-
-        if (confirmedRejected) {
-          const confirmedReplay = normalizeReplayApi(confirmedRejected.replay_api);
-          const updatedMeta = {
-            ...meta,
-            ahminix_status: confirmedRejected.status,
-            ahminix_replay: confirmedReplay,
-            completed_at: new Date().toISOString()
-          };
-          await supabase.from("orders").update({
-            status: "cancelled",
-            meta: JSON.stringify(updatedMeta)
-          }).eq("id", matchOrder.id);
-
+        if (newStatus === "cancelled") {
           await supabase.rpc("increment_balance", {
             user_id_param: userId,
             amount_param: matchOrder.total_amount
           });
-
-          const notifTitle = "❌ تم إلغاء طلبك";
-          const notifBody = `تم إلغاء الطلب وإعادة رصيدك`;
-          await sendPushNotification(String(userId), notifTitle, notifBody, "/");
-          await supabase.from("notifications").insert({
-            user_id: userId, title: notifTitle, message: notifBody,
-            type: "warning"
-          });
-
-          return res.json({ status: confirmedRejected.status, replay_api: confirmedReplay });
         }
+
+        const notifTitle = newStatus === "completed" ? "✅ تم تنفيذ طلبك!" : "❌ تم إلغاء طلبك";
+        const notifBody = newStatus === "completed"
+          ? `تم تنفيذ طلب ${meta?.product_name || ""} بنجاح`
+          : `تم إلغاء الطلب وإعادة رصيدك`;
+        await sendPushNotification(String(userId), notifTitle, notifBody, "/");
+        await supabase.from("notifications").insert({
+          user_id: userId, title: notifTitle, message: notifBody,
+          type: newStatus === "completed" ? "success" : "warning"
+        });
       }
 
-      res.json({ status: isAhminixAcceptedStatus(ext.status) ? ext.status : "processing", replay_api: normalizedReplay });
+      res.json({ status: rawStatus || "processing", replay_api: normalizedReplay });
     } catch (e: any) {
       safeError(res, e);
     }
@@ -1600,10 +1876,10 @@ async function startServer() {
           const override = overridesMap[ap.id] || {};
           const basePrice = parseFloat(ap.price) || 0;
 
-          // السعر النهائي = سعر API × (1 + نسبة الربح%) — يُخزَّن بـ 7 خانات عشرية بالضبط
+          // السعر: مخصص يدوياً أو محسوب بنسبة الربح
           const finalPrice = override.price && parseFloat(override.price) > 0
-            ? Number(Number(override.price).toFixed(7))
-            : Number((basePrice * (1 + markupPercent / 100)).toFixed(7));
+            ? parseFloat(parseFloat(override.price).toFixed(6))
+            : parseFloat((basePrice * (1 + markupPercent / 100)).toFixed(6));
 
           const { data: existing } = await supabase
             .from("products")
@@ -1614,7 +1890,7 @@ async function startServer() {
           const productData: any = {
             name: ap.name,
             price: finalPrice,
-            price_per_unit: finalPrice,
+            price_per_unit: parseFloat(basePrice.toFixed(6)), // سعر التكلفة من API
             description: ap.category_name || "",
             store_type: "external_api",
             requires_input: ap.params && ap.params.length > 0,
@@ -1630,8 +1906,8 @@ async function startServer() {
           if (existing) {
             const updateData: any = {
               name: productData.name,
-              price: productData.price,
-              price_per_unit: productData.price_per_unit,
+              price: productData.price, // سعر البيع
+              price_per_unit: productData.price_per_unit, // سعر التكلفة
               available: productData.available,
               min_quantity: productData.min_quantity,
               max_quantity: productData.max_quantity,
@@ -1800,18 +2076,21 @@ async function startServer() {
       const ahminixUuid = meta?.ahminix_order_uuid;
       if (!ahminixId && !ahminixUuid) return res.status(400).json({ error: "الطلب ليس خارجياً" });
 
-      const ext = await fetchAhminixOrderSnapshot(ahminixId, ahminixUuid);
-      if (!ext) return res.json({ status: "OK", message: "لا استجابة من API", raw: null });
+      const doCheck = async () => {
+        let r: any = null;
+        if (ahminixUuid && ahminixUuid !== String(ahminixId)) {
+          r = await ahminixCheckOrder(ahminixUuid, true);
+          if (r?.status !== "OK" || !r?.data?.[0]) r = null;
+        }
+        if (!r && ahminixId) r = await ahminixCheckOrder(ahminixId, String(ahminixId).includes("-"));
+        return r;
+      };
+
+      const { status: newStatus, raw: rawStatus, data: ext } = await getFinalOrderStatus(doCheck, 3, 1500);
+      if (!ext) return res.json({ status: "OK", message: "لا استجابة من API" });
 
       const normalizedReplay = normalizeReplayApi(ext.replay_api);
-      const newStatus = isAhminixAcceptedStatus(ext.status)
-        ? "completed"
-        : isAhminixRejectedStatus(ext.status)
-          ? ((await confirmAhminixRejectedStatus(ahminixId, ahminixUuid)) ? "cancelled" : "processing")
-          : "processing";
-
-      const finalExtStatus = newStatus === "processing" ? "processing" : ext.status;
-      const updatedMeta = { ...meta, ahminix_status: finalExtStatus, ahminix_replay: normalizedReplay, synced_at: new Date().toISOString() };
+      const updatedMeta = { ...meta, ahminix_status: rawStatus, ahminix_replay: normalizedReplay, synced_at: new Date().toISOString() };
       await supabase.from("orders").update({ status: newStatus, meta: JSON.stringify(updatedMeta) }).eq("id", order.id);
 
       if (newStatus === "cancelled" && order.status !== "cancelled") {
@@ -1819,11 +2098,11 @@ async function startServer() {
       }
       if (order.user_id && newStatus !== order.status) {
         const notifTitle = newStatus === "completed" ? "✅ تم تنفيذ طلبك!" : newStatus === "cancelled" ? "❌ تم إلغاء طلبك" : "🔄 تحديث طلبك";
-        const notifBody = newStatus === "completed" ? `تم تنفيذ طلب ${meta?.product_name || ""} بنجاح` : newStatus === "cancelled" ? `تم إلغاء طلب ${meta?.product_name || ""} وإعادة رصيدك` : `تم تحديث حالة طلب ${meta?.product_name || ""}`;
+        const notifBody = newStatus === "completed" ? `تم تنفيذ طلب ${meta?.product_name || ""} بنجاح` : `تم إلغاء طلب ${meta?.product_name || ""} وإعادة رصيدك`;
         await supabase.from("notifications").insert({ user_id: order.user_id, title: notifTitle, message: notifBody, type: newStatus === "completed" ? "success" : "warning" });
       }
 
-      res.json({ status: "OK", oldStatus: order.status, newStatus, ahminixStatus: finalExtStatus, replay: normalizedReplay });
+      res.json({ status: "OK", oldStatus: order.status, newStatus, ahminixStatus: rawStatus, replay: normalizedReplay });
     } catch (e: any) {
       safeError(res, e);
     }
@@ -1861,35 +2140,29 @@ async function startServer() {
           const meta = typeof order.meta === "string" ? JSON.parse(order.meta) : order.meta;
           const ahminixId   = meta?.ahminix_order_id;
           const ahminixUuid = meta?.ahminix_order_uuid;
-          if (!ahminixId) continue; // طلب محلي، تجاهل
+          if (!ahminixId) continue;
 
-          // نحاول بالـ UUID أولاً ثم الـ numeric ID (نفس منطق check-external)
-          let checkRes: any = null;
-          if (ahminixUuid && ahminixUuid !== String(ahminixId)) {
-            checkRes = await ahminixCheckOrder(ahminixUuid, true);
-            if (checkRes?.status !== "OK" || !checkRes?.data?.[0]) checkRes = null;
-          }
-          if (!checkRes) {
-            const isUuid = String(ahminixId).includes("-");
-            checkRes = await ahminixCheckOrder(ahminixId, isUuid);
-          }
+          const doCheck = async () => {
+            let r: any = null;
+            if (ahminixUuid && ahminixUuid !== String(ahminixId)) {
+              r = await ahminixCheckOrder(ahminixUuid, true);
+              if (r?.status !== "OK" || !r?.data?.[0]) r = null;
+            }
+            if (!r) r = await ahminixCheckOrder(ahminixId, String(ahminixId).includes("-"));
+            return r;
+          };
 
-          if (checkRes?.status !== "OK" || !checkRes?.data?.[0]) continue;
+          const { status: newStatus, raw: rawStatus, data: ext } = await getFinalOrderStatus(doCheck, 3, 1000);
+          if (!ext) continue;
 
-          const externalOrder = checkRes.data[0];
-          const rawReplay = externalOrder.replay_api;
-          const normalizedReplay = (Array.isArray(rawReplay) ? rawReplay : rawReplay ? [rawReplay] : [])
-            .filter(Boolean).map(String);
-
-          const newStatus = mapAhminixStatus(externalOrder.status);
+          const normalizedReplay = normalizeReplayApi(ext.replay_api);
 
           if (newStatus !== order.status) {
             await supabase.from("orders").update({
               status: newStatus,
-              meta: JSON.stringify({ ...meta, ahminix_status: externalOrder.status, ahminix_replay: normalizedReplay, completed_at: new Date().toISOString() })
+              meta: JSON.stringify({ ...meta, ahminix_status: rawStatus, ahminix_replay: normalizedReplay, completed_at: new Date().toISOString() })
             }).eq("id", order.id);
 
-            // إعادة رصيد المستخدم إذا أُلغي
             if (newStatus === "cancelled") {
               await supabase.rpc("increment_balance", {
                 user_id_param: order.user_id,
@@ -1898,7 +2171,7 @@ async function startServer() {
             }
 
             updated++;
-            results.push({ orderId: order.id, ahminixId, oldStatus: order.status, newStatus, replayCount: normalizedReplay.length });
+            results.push({ orderId: order.id, ahminixId, oldStatus: order.status, newStatus, rawStatus, replayCount: normalizedReplay.length });
           } else {
             results.push({ orderId: order.id, ahminixId, status: newStatus, note: "no change" });
           }
@@ -2079,35 +2352,28 @@ async function startServer() {
         return res.status(400).json({ error: "لا يمكنك إرسال أكثر من مدفوعتين قيد المراجعة." });
       }
 
-
-      const numericAmount = parseFloat(String(amount));
-
       const { data: tx, error: txErr } = await supabase.from("transactions").insert({
         user_id: userId,
-        payment_method_id: Number(paymentMethodId),
-        amount: numericAmount,
-        note: note || null,
-        receipt_image_url: receiptImageUrl || null,
+        payment_method_id: paymentMethodId,
+        amount,
+        note,
+        receipt_image_url: receiptImageUrl,
         status: "pending"
       }).select().single();
       if (txErr) throw txErr;
 
-      sendTelegramMessage(`💳 شحن رصيد جديد\\nالاسم: ${user?.name}\\nرقم الدخول: #${user?.id}\\nAmount: ${numericAmount}\\nMethod: ${method?.name}`);
+      sendTelegramMessage(`💳 شحن رصيد جديد\nالاسم: ${user?.name}\nرقم الدخول: #${user?.id}\nAmount: ${amount}\nMethod: ${method?.name}`);
 
       const adminChatId = process.env.TELEGRAM_CHAT_ID;
       if (adminChatId && adminBot) {
-        try {
-          const adminMsg = `💰 طلب شحن جديد! #TX${tx.id}\\n\\nالمستخدم: ${user?.name}\\nالمبلغ: ${numericAmount}$\\nالطريقة: ${method?.name}\\n\\nرابط الإيصال: ${receiptImageUrl || "لا يوجد"}`;
-          await adminBot.sendMessage(adminChatId, adminMsg, {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: "✅ قبول", callback_data: `approve_tx_${tx.id}` }, { text: "❌ رفض", callback_data: `reject_tx_${tx.id}` }]
-              ]
-            }
-          });
-        } catch (telegramErr) {
-          console.error("[Telegram] Failed to send admin notification:", telegramErr);
-        }
+        const adminMsg = `💰 طلب شحن جديد! #TX${tx.id}\n\nالمستخدم: ${user?.name}\nالمبلغ: ${amount}$\nالطريقة: ${method?.name}\n\nرابط الإيصال: ${receiptImageUrl}`;
+        adminBot.sendMessage(adminChatId, adminMsg, {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "✅ قبول", callback_data: `approve_tx_${tx.id}` }, { text: "❌ رفض", callback_data: `reject_tx_${tx.id}` }]
+            ]
+          }
+        });
       }
 
       res.json({ success: true, transactionId: tx.id });
@@ -2589,19 +2855,19 @@ async function startServer() {
       const fromIso = fromDate.toISOString();
       const toIso = toDate.toISOString();
 
-      // جلب الطلبات المقبولة مع تفاصيل المنتجات
+      // جلب الطلبات المقبولة مع تفاصيل المنتجات (نجلب extra_data أيضاً للحصول على سعر التكلفة)
       const { data: acceptedOrders } = await supabase
         .from("orders")
-        .select("id, total_amount, created_at, order_items(price_at_purchase, quantity, products(price, price_per_unit, external_id))")
+        .select("id, total_amount, created_at, order_items(price_at_purchase, quantity, extra_data, products(price, price_per_unit, external_id, store_type))")
         .eq("status", "completed")
         .gte("created_at", fromIso)
         .lte("created_at", toIso);
 
-      // جلب الطلبات المرفوضة
+      // جلب الطلبات المرفوضة (تشمل جميع حالات الرفض)
       const { count: rejectedCount } = await supabase
         .from("orders")
         .select("id", { count: "exact", head: true })
-        .in("status", ["rejected","failed","cancelled"])
+        .in("status", ["rejected", "failed", "cancelled"])
         .gte("created_at", fromIso)
         .lte("created_at", toIso);
 
@@ -2613,41 +2879,61 @@ async function startServer() {
         .gte("created_at", fromIso)
         .lte("created_at", toIso);
 
-      const grossRevenue = (acceptedOrders || []).reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0);
-      const totalPayments = (payments || []).reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
-
-      // سعر البيع = price_at_purchase (ما دفعه المستخدم)
-      // سعر التكلفة = api_cost_price المحفوظ في order meta (إن وجد)، أو صفر للمنتجات اليدوية
-      // الربح الصافي = إجمالي البيع - إجمالي التكلفة
+      // حساب صافي الربح:
+      // الإيراد = price_at_purchase × الكمية (السعر الذي دفعه المستخدم)
+      // التكلفة = price_per_unit × الكمية (سعر الشراء من API)
+      // صافي الربح = الإيراد - التكلفة
       let apiCost = 0;
-      let totalSell = 0;
+      let grossRevenue = 0;
+      let ordersWithCost = 0;
+      let ordersWithoutCost = 0;
+
       for (const order of (acceptedOrders || [])) {
         for (const item of (order.order_items || [])) {
-          const qty = item.quantity || 1;
-          const sellPrice = item.price_at_purchase || item.products?.price || 0; // سعر البيع للعميل
-          // سعر التكلفة: نجلبه من meta الطلب (ahminix_cost) أو من products.api_cost_price إن وجد
-          let metaOrder: any = {};
-          try { metaOrder = JSON.parse((order as any).meta || "{}"); } catch {}
-          const costPrice = metaOrder?.ahminix_cost_price ||
-                            item.products?.api_cost_price ||
-                            (item.products?.external_id ? 0 : 0); // للمنتجات اليدوية التكلفة صفر
-          apiCost  += Number(costPrice) * qty;
-          totalSell += sellPrice * qty;
+          const qty = Number(item.quantity) || 1;
+          // price_at_purchase = سعر البيع الذي دفعه المستخدم
+          const sellPrice = parseFloat(String(item.price_at_purchase ?? "0")) || 0;
+
+          // سعر التكلفة: نقرأ أولاً من cost_price المحفوظ لحظة الشراء في extra_data
+          // (يضمن دقة الأرباح حتى لو تغيّر price_per_unit لاحقاً أو كان 0 في قاعدة البيانات)
+          let itemExtraData: any = {};
+          try { itemExtraData = JSON.parse(item.extra_data || "{}"); } catch {}
+          const costFromSnapshot = parseFloat(String(itemExtraData?.cost_price ?? "")) || 0;
+          const rawCost = costFromSnapshot > 0 ? costFromSnapshot : item.products?.price_per_unit;
+          const costPrice = (rawCost !== null && rawCost !== undefined && rawCost !== "" && parseFloat(String(rawCost)) > 0)
+            ? parseFloat(String(rawCost))
+            : 0;
+
+          const revenue = sellPrice * qty;
+          const cost = costPrice * qty;
+
+          grossRevenue += revenue;
+          // إذا لم يكن للمنتج سعر تكلفة محدد، نعتبر التكلفة = سعر البيع (ربح = 0) لعدم التضليل
+          apiCost += costPrice > 0 ? cost : revenue;
+
+          if (costPrice > 0) ordersWithCost++;
+          else ordersWithoutCost++;
         }
       }
-      if (totalSell === 0) totalSell = grossRevenue;
 
-      const profit = totalSell - apiCost;
-      const profitMargin = totalSell > 0 ? (profit / totalSell) * 100 : 0;
+      const totalPayments = (payments || []).reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0);
+      const profit = grossRevenue - apiCost;
+      // نسبة الربح الفعلية: (سعر البيع - سعر التكلفة) / سعر التكلفة × 100
+      const profitMargin = apiCost > 0 ? (profit / apiCost) * 100 : 0;
+      // هامش الربح الصافي: profit / grossRevenue × 100
+      const netMargin = grossRevenue > 0 ? (profit / grossRevenue) * 100 : 0;
 
       res.json({
         accepted_orders: (acceptedOrders || []).length,
         rejected_orders: rejectedCount || 0,
         total_payments: totalPayments,
-        gross_revenue: totalSell,
+        gross_revenue: grossRevenue,
         api_cost: apiCost,
         profit,
-        profit_margin: profitMargin,
+        profit_margin: profitMargin,  // نسبة الربح على التكلفة
+        net_margin: netMargin,        // هامش الربح الصافي
+        orders_with_cost: ordersWithCost,
+        orders_without_cost: ordersWithoutCost,
         from: fromIso,
         to: toIso,
       });
@@ -2745,10 +3031,10 @@ async function startServer() {
         return {
           ...order,
           user_name: order.users?.name || "مستخدم محذوف",
-          user_email: order.users?.email || null,
-          user_phone: order.users?.phone || null,
+          user_email: order.users?.email || "—",
+          user_phone: order.users?.phone || "—",
+          user_db_id: order.users?.id || order.user_id,
           user_avatar: order.users?.avatar_url || null,
-          user_login_id: order.users?.id || null,
           product_name: product?.name || "منتج محذوف",
           category_name: product?.subcategories?.categories?.name || null,
           subcategory_name: product?.subcategories?.name || null,
@@ -2763,7 +3049,7 @@ async function startServer() {
 
   app.post("/api/admin/orders/:id/status", async (req, res) => {
     try {
-      const { status, response, admin_response } = req.body;
+      const { status, response, admin_response, override_player_id } = req.body;
       const responseText = response || admin_response;
 
       // جلب بيانات الطلب الكاملة
@@ -2777,104 +3063,183 @@ async function startServer() {
       let metaParsed: any = {};
       try { metaParsed = JSON.parse(order.meta || "{}"); } catch {}
 
+      // استخراج extra_data من order_items كـ fallback
+      let itemExtraParsed: any = {};
+      try { itemExtraParsed = JSON.parse(order.order_items?.[0]?.extra_data || "{}"); } catch {}
+
       let finalStatus = status;
       let updatedMeta = { ...metaParsed };
 
-      // إذا كان الأدمن يوافق على طلب خارجي كان ينتظر
+      // =================== تحديث مباشر للحالة من الأدمن ===================
+      // إذا اختار الأدمن completed/processing/cancelled مباشرة نحفظها بدون API خارجي
+      if (status === 'completed' || status === 'processing' || status === 'cancelled') {
+        if (status === 'completed') {
+          updatedMeta = { ...updatedMeta, admin_completed_at: new Date().toISOString() };
+        }
+        const { error: directErr } = await supabase.from("orders").update({
+          status: finalStatus,
+          admin_response: responseText || null,
+          meta: JSON.stringify(updatedMeta)
+        }).eq("id", req.params.id);
+        if (directErr) throw directErr;
+        await supabase.from("notifications").insert({
+          user_id: order.user_id,
+          title: `تحديث حالة الطلب #${req.params.id}`,
+          message: status === 'completed'
+            ? `تم اكتمال طلبك #${req.params.id} بنجاح. ${responseText || ""}`
+            : status === 'cancelled'
+            ? `تم إلغاء طلبك #${req.params.id}. ${responseText || ""}`
+            : `حالة طلبك الآن: ${status}. ${responseText || ""}`,
+          type: status === 'completed' ? "success" : status === 'cancelled' ? "warning" : "info"
+        });
+        if (order.user_id && responseText) {
+          sendTelegramToUser(order.user_id, `🔔 وصلك رد جديد على طلبك #${req.params.id}:
+
+${responseText}`);
+        }
+        return res.json({ success: true, finalStatus });
+      }
+      // ==================================================================================
+
+      // =================== ADMIN MANUAL APPROVE — نفس منطق AUTO تماماً ===================
       if (status === 'approved' && order.status === 'pending_admin') {
         const product = order.order_items?.[0]?.products;
 
-        // التحقق من رصيد المستخدم قبل الإرسال
-        const { data: userBalance } = await supabase.from("users").select("balance").eq("id", order.user_id).single();
-        if (!userBalance || userBalance.balance < order.total_amount) {
-          return res.status(400).json({ error: "لا تمتلك رصيد كافي لتنفيذ هذا الطلب" });
+        // --- نفس منطق استخراج playerId من AUTO flow ---
+        // الأولوية: override من الأدمن ← meta (extraData) ← extra_data من order_items
+        let playerId = "";
+        if (override_player_id && String(override_player_id).trim()) {
+          playerId = String(override_player_id).trim();
+        } else if (product?.requires_input) {
+          // منتج يتطلب player ID — نبحث في نفس الأماكن التي يبحث فيها AUTO
+          playerId = (
+            metaParsed?.playerId ||
+            metaParsed?.input ||
+            metaParsed?.userId ||
+            metaParsed?.gameId ||
+            metaParsed?.accountId ||
+            itemExtraParsed?.playerId ||
+            itemExtraParsed?.input ||
+            ""
+          ).toString().trim();
+        } else {
+          // منتج لا يتطلب input — نأخذ أي قيمة متاحة
+          playerId = (
+            metaParsed?.playerId ||
+            metaParsed?.input ||
+            itemExtraParsed?.playerId ||
+            itemExtraParsed?.input ||
+            ""
+          ).toString().trim();
         }
 
-        if (product?.external_id && String(product.external_id).trim() !== "") {
+        const hasExtId = product?.external_id && String(product.external_id).trim() !== "";
+
+        console.log(`[ADMIN APPROVE] order=#${order.id} | ext_id=${product?.external_id} | hasExtId=${hasExtId} | store_type=${product?.store_type} | requires_input=${product?.requires_input} | playerId="${playerId}" | TOKEN=${!!AHMINIX_TOKEN}`);
+
+        if (hasExtId) {
           if (!AHMINIX_TOKEN) {
-            return res.status(500).json({ error: "AHMINIX_API_TOKEN غير مضبوط" });
+            return res.status(500).json({ error: "AHMINIX_API_TOKEN غير مضبوط في .env" });
           }
-          // دعم override_player_id من الأدمن، وإلا نستخدم البيانات المحفوظة بالطلب
-          const overridePlayerId = req.body?.override_player_id;
-          const playerId = (
-            (overridePlayerId !== undefined && overridePlayerId !== null && String(overridePlayerId).trim() !== "")
-              ? String(overridePlayerId).trim()
-              : (
-                  metaParsed?.playerId ||
-                  metaParsed?.input ||
-                  metaParsed?.userId ||
-                  metaParsed?.gameId ||
-                  metaParsed?.accountId ||
-                  ""
-                )
-          );
+
+          // --- نفس منطق qty و UUID من AUTO flow ---
           const qty = Math.max(1, Number(order.order_items?.[0]?.quantity) || 1);
-          // UUID v4 حقيقي — نفس منطق الـ auto flow تماماً
           const orderUuid = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
             const r = Math.random() * 16 | 0;
             return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
           });
 
-          console.log(`[API] Admin approved order #${order.id} - sending to API`);
-          const apiRes = await ahminixCreateOrder(String(product.external_id), qty, playerId, orderUuid);
+          console.log(`[ADMIN APPROVE] Sending to API: ext_id=${product.external_id} | qty=${qty} | playerId="${playerId}" | uuid=${orderUuid}`);
 
+          const apiRes = await ahminixCreateOrder(
+            String(product.external_id).trim(),
+            qty,
+            playerId,
+            orderUuid
+          );
+
+          console.log(`[ADMIN APPROVE] API response:`, JSON.stringify(apiRes));
+
+          // --- نفس منطق معالجة الرد من AUTO flow ---
           if (!apiRes || apiRes.status !== "OK") {
-            const errMsg = apiRes?.message || apiRes?.error || "فشل إرسال الطلب للـ API";
-            return res.status(400).json({ error: errMsg });
-          }
+            // فشل API — نُرجع خطأ واضح للأدمن (نفس سلوك AUTO)
+            const errorCodes: Record<number, string> = {
+              120: "رمز API مطلوب",
+              121: "خطأ في رمز API — تحقق من AHMINIX_API_TOKEN",
+              122: "غير مسموح باستخدام API",
+              123: "عنوان IP غير مسموح به",
+              130: "الموقع قيد الصيانة",
+              100: "رصيد API غير كافٍ",
+              105: "الكمية غير متوفرة",
+              106: "الكمية غير مسموح بها",
+              112: "الكمية صغيرة جداً",
+              113: "الكمية كبيرة جداً",
+              114: "معلمة غير صالحة — تحقق من Player ID",
+              500: "خطأ غير معروف"
+            };
+            const code = apiRes?.code || apiRes?.error_code;
+            const errMsg = (code && errorCodes[Number(code)]) || apiRes?.message || apiRes?.error || "فشل الطلب لدى المورد";
+            console.error(`[ADMIN APPROVE] API FAILED for order #${order.id}:`, JSON.stringify(apiRes));
 
-          const apiStatus = apiRes.data?.status;
+            // نحفظ الخطأ في meta ونضع الطلب في processing
+            // لا نوقف التنفيذ — نكمل لحفظ DB وإرسال الإشعار
+            updatedMeta = {
+              ...updatedMeta,
+              admin_approved_at: new Date().toISOString(),
+              api_send_attempted: true,
+              api_error_code: Number(code || 0),
+              api_error_msg: errMsg,
+              api_error_at: new Date().toISOString(),
+              last_api_error: errMsg
+            };
+            finalStatus = "processing";
+          } else {
+          // نجح API — نفس ما يفعله AUTO
+          const ahminixRawStatus = apiRes.data?.status || "";
+          const mappedStatus = normalizeOrderStatus(ahminixRawStatus);
+          const ahminixOrderId = String(apiRes.data?.order_id || orderUuid);
+          const ahminixReplay = normalizeReplayApi(apiRes.data?.replay_api);
+
           updatedMeta = {
             ...updatedMeta,
-            ahminix_order_id: apiRes.data?.order_id,
-            ahminix_status: apiStatus,
-            ahminix_replay: apiRes.data?.replay_api || [],
+            order_mode: "manual_approved",
+            ahminix_order_id: ahminixOrderId,
+            ahminix_order_uuid: orderUuid,
+            ahminix_status: ahminixRawStatus,
+            ahminix_replay: ahminixReplay,
             admin_approved_at: new Date().toISOString()
           };
-          // استخدام الكلمات المؤكدة فقط: المقبول → completed، والمرفوض المؤكد فقط → failed
-          if (isAhminixAcceptedStatus(apiStatus || '')) {
-            finalStatus = 'completed';
-          } else if (isAhminixRejectedStatus(apiStatus || '')) {
-            finalStatus = 'failed';
-          } else {
-            finalStatus = 'processing';
+
+          // نفس منطق تحديد الحالة النهائية من AUTO
+          finalStatus = mappedStatus === "completed" ? "completed" : "processing";
+
+          console.log(`[ADMIN APPROVE] SUCCESS: ahminix_id=${ahminixOrderId} | status=${ahminixRawStatus} → ${finalStatus}`);
           }
+
         } else {
-          // منتج عادي تمت الموافقة عليه
-          finalStatus = 'completed';
+          // منتج بدون external_id (لا يتصل بـ API) — اعتباره مكتمل مباشرة
+          finalStatus = "completed";
+          updatedMeta = { ...updatedMeta, admin_approved_at: new Date().toISOString() };
+          console.log(`[ADMIN APPROVE] No external_id — marking as completed directly`);
         }
       }
+      // ==================================================================================
 
       // إذا كان الأدمن يرفض طلب
       if (status === 'rejected') {
         finalStatus = 'failed';
-        // إعادة الرصيد للمستخدم فقط إذا لم يتم استرداده مسبقاً
-        if (!metaParsed?.refunded) {
-          const { data: userBalance } = await supabase.from("users").select("balance").eq("id", order.user_id).single();
-          if (userBalance) {
-            await supabase.from("users").update({ balance: userBalance.balance + order.total_amount }).eq("id", order.user_id);
-            updatedMeta = { ...updatedMeta, refunded: true, refunded_at: new Date().toISOString() };
-          }
+        // إعادة الرصيد للمستخدم
+        const { data: userBalance } = await supabase.from("users").select("balance").eq("id", order.user_id).single();
+        if (userBalance) {
+          await supabase.from("users").update({ balance: userBalance.balance + order.total_amount }).eq("id", order.user_id);
+          updatedMeta = { ...updatedMeta, refunded: true, refunded_at: new Date().toISOString() };
         }
       }
 
-      // تعديل مباشر على الحالة (للأدمن فقط) — يسمح بتغيير المكتمل والمرفوض
-      if (status === 'set_completed') {
-        finalStatus = 'completed';
-      } else if (status === 'set_failed') {
-        finalStatus = 'failed';
-        if (!metaParsed?.refunded) {
-          const { data: ub } = await supabase.from("users").select("balance").eq("id", order.user_id).single();
-          if (ub) {
-            await supabase.from("users").update({ balance: ub.balance + order.total_amount }).eq("id", order.user_id);
-            updatedMeta = { ...updatedMeta, refunded: true, refunded_at: new Date().toISOString() };
-          }
-        }
-      }
-
+      // حفظ الحالة النهائية و meta المحدّثة في DB دائماً
       const { error: oErr } = await supabase.from("orders").update({
         status: finalStatus,
-        admin_response: responseText,
+        admin_response: responseText || null,
         meta: JSON.stringify(updatedMeta)
       }).eq("id", req.params.id);
       if (oErr) throw oErr;
@@ -2892,7 +3257,7 @@ async function startServer() {
         sendTelegramToUser(order.user_id, `🔔 وصلك رد جديد على طلبك #${req.params.id}:\n\n${responseText}`);
       }
 
-      res.json({ success: true, finalStatus });
+      res.json({ success: true, finalStatus, apiError: updatedMeta.api_error_msg || null });
     } catch (e: any) {
       safeError(res, e);
     }
@@ -2900,19 +3265,21 @@ async function startServer() {
 
   app.get("/api/admin/transactions", async (req, res) => {
     try {
-      const { data, error } = await supabase.from("transactions").select("*, users(id, name, email, phone, avatar_url), payment_methods(id, name, method_type)").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("*, users(id, name, email, phone), payment_methods(name)")
+        .order("created_at", { ascending: false });
       if (error) throw error;
-      const enrichedTx = (data || []).map((t: any) => ({
+      // flatten user info
+      const enriched = (data || []).map((t: any) => ({
         ...t,
-        user_name: t.users?.name || "مستخدم محذوف",
-        user_email: t.users?.email || null,
-        user_phone: t.users?.phone || null,
-        user_avatar: t.users?.avatar_url || null,
-        user_login_id: t.users?.id || null,
-        payment_method_name: t.payment_methods?.name || t.payment_method_name || null,
-        payment_method_type: t.payment_methods?.method_type || null,
+        user_name: t.users?.name || "—",
+        user_email: t.users?.email || "—",
+        user_phone: t.users?.phone || "—",
+        user_db_id: t.users?.id || t.user_id,
+        payment_method_name: t.payment_methods?.name || "—",
       }));
-      res.json(enrichedTx);
+      res.json(enriched);
     } catch (e: any) {
       safeError(res, e);
     }
@@ -2924,10 +3291,10 @@ async function startServer() {
       if (txErr || !tx) return res.status(404).json({ error: "Transaction not found" });
       if (tx.status !== "pending") return res.status(400).json({ error: "Invalid transaction" });
 
-      // دعم تغيير المبلغ من قِبل الأدمن
-      const overrideAmount = req.body?.override_amount;
-      const finalAmount = (overrideAmount !== undefined && overrideAmount !== null && !isNaN(parseFloat(overrideAmount)) && parseFloat(overrideAmount) > 0)
-        ? parseFloat(overrideAmount)
+      // دعم تغيير المبلغ من الأدمن
+      const customAmount = req.body?.custom_amount;
+      const finalAmount = (customAmount !== undefined && !isNaN(parseFloat(customAmount)) && parseFloat(customAmount) > 0)
+        ? parseFloat(customAmount)
         : tx.amount;
 
       await supabase.from("transactions").update({ status: "approved", amount: finalAmount }).eq("id", req.params.id);
@@ -2950,26 +3317,7 @@ async function startServer() {
 
   app.post("/api/admin/transactions/:id/reject", async (req, res) => {
     try {
-      const { reason } = req.body;
-      const { data: tx, error: txErr } = await supabase.from("transactions").select("*").eq("id", req.params.id).single();
-      if (txErr || !tx) return res.status(404).json({ error: "Transaction not found" });
-      if (tx.status !== "pending") return res.status(400).json({ error: "لا يمكن رفض هذه الدفعة — ليست في حالة انتظار" });
-
-      await supabase.from("transactions").update({
-        status: "rejected",
-        admin_response: reason || null
-      }).eq("id", req.params.id);
-
-      await supabase.from("notifications").insert({
-        user_id: tx.user_id,
-        title: "تم رفض طلب الشحن",
-        message: reason
-          ? `تم رفض طلب شحن رصيدك (#TX${tx.id}). السبب: ${reason}`
-          : `تم رفض طلب شحن رصيدك (#TX${tx.id}).`,
-        type: "error"
-      });
-
-      sendTelegramToUser(tx.user_id, `❌ تم رفض طلب الشحن #TX${tx.id}${reason ? `\nالسبب: ${reason}` : ""}`);
+      await supabase.from("transactions").update({ status: "rejected" }).eq("id", req.params.id);
       res.json({ success: true });
     } catch (e: any) {
       safeError(res, e);
@@ -3120,9 +3468,9 @@ async function startServer() {
 
   app.post("/api/admin/payment-methods", async (req, res) => {
     try {
-      const { name, image_url, wallet_address, instructions, min_amount, active, method_type, api_account } = req.body;
+      const { name, image_url, wallet_address, instructions, description, min_amount, active, method_type, api_account } = req.body;
       const { data, error } = await supabase.from("payment_methods").insert({
-        name, image_url, wallet_address, instructions, min_amount, active,
+        name, image_url, wallet_address, instructions, description: description || null, min_amount, active,
         method_type: method_type || "manual",
         api_account: api_account || null
       }).select().single();
@@ -3139,7 +3487,7 @@ async function startServer() {
         subcategory_id, sub_sub_category_id,
         category_special_id, subcategory_special_id, sub_sub_category_special_id,
         name, price, description, image_url, store_type, requires_input,
-        min_quantity, available, external_id, price_per_unit
+        min_quantity, max_quantity, available, external_id, price_per_unit
       } = req.body;
 
       // ── Validation ──
@@ -3152,7 +3500,7 @@ async function startServer() {
       if (price_per_unit !== undefined && price_per_unit !== "" && !isValidAmount(price_per_unit, 0, 1000000)) {
         return res.status(400).json({ error: "سعر الوحدة غير صحيح" });
       }
-      const validStoreTypes = ["simple","normal","quantities","accounts","external_api","quick_order","numbers"];
+      const validStoreTypes = ["simple","quantities","accounts","external_api","quick_order"];
       if (store_type && !validStoreTypes.includes(store_type)) {
         return res.status(400).json({ error: "نوع المتجر غير صحيح" });
       }
@@ -3192,7 +3540,7 @@ async function startServer() {
 
       const insertData: any = {
         subcategory_id, sub_sub_category_id: sub_sub_category_id || null,
-        name, price: Number(Number(price || "0").toFixed(7)),
+        name, price: parseFloat(price) || 0,
         description, image_url,
         store_type: store_type || "normal",
         requires_input: requires_input || false,
@@ -3201,7 +3549,7 @@ async function startServer() {
         available: available ?? true,
         external_id: external_id || null
       };
-      if (price_per_unit !== undefined) insertData.price_per_unit = Number(Number(String(price_per_unit) || "0").toFixed(7));
+      if (price_per_unit !== undefined) insertData.price_per_unit = parseFloat(price_per_unit) || 0;
 
       const { data, error } = await supabase.from("products").insert(insertData).select().single();
       if (error) throw error;
@@ -3215,8 +3563,8 @@ async function startServer() {
     try {
       const { price, price_per_unit } = req.body;
       const updateData: any = {};
-      if (price !== undefined) updateData.price = Number(Number(String(price)).toFixed(7));
-      if (price_per_unit !== undefined) updateData.price_per_unit = Number(Number(String(price_per_unit)).toFixed(7));
+      if (price !== undefined) updateData.price = price;
+      if (price_per_unit !== undefined) updateData.price_per_unit = price_per_unit;
       await supabase.from("products").update(updateData).eq("id", req.params.id);
       res.json({ success: true });
     } catch (e: any) {
@@ -3234,8 +3582,8 @@ async function startServer() {
         if (allowed.includes(k)) {
           // normalize numeric fields
           if (["price","price_per_unit"].includes(k)) {
-            updateData[k] = Number(Number(String(payload[k] || "0")).toFixed(7));
-          } else if (k === "min_quantity") {
+            updateData[k] = parseFloat(payload[k]) || 0;
+          } else if (k === "min_quantity" || k === "max_quantity") {
             updateData[k] = payload[k] !== null && payload[k] !== undefined && payload[k] !== "" ? parseInt(payload[k]) : null;
           } else if (k === "requires_input" || k === "available") {
             updateData[k] = payload[k] === true || payload[k] === "true" || payload[k] === 1 || payload[k] === "1";
@@ -3306,13 +3654,14 @@ async function startServer() {
 
   app.patch("/api/admin/payment-methods/:id", async (req, res) => {
     try {
-      const { name, image_url, wallet_address, min_amount, instructions } = req.body;
+      const { name, image_url, wallet_address, min_amount, instructions, description } = req.body;
       const updateData: any = {};
       if (name !== undefined) updateData.name = name;
       if (image_url !== undefined) updateData.image_url = image_url;
       if (wallet_address !== undefined) updateData.wallet_address = wallet_address;
       if (min_amount !== undefined) updateData.min_amount = parseFloat(min_amount);
       if (instructions !== undefined) updateData.instructions = instructions;
+      if (description !== undefined) updateData.description = description || null;
       const { error } = await supabase.from("payment_methods").update(updateData).eq("id", req.params.id);
       if (error) throw error;
       res.json({ success: true });
@@ -3485,8 +3834,7 @@ async function startServer() {
             );
             await supabase.from("sub_sub_categories").delete().in("id", subsubIds);
           }
-          await safeDeleteProductsBy("subcategory_id", id);
-          // delete each sub's products
+          // حذف منتجات كل قسم فرعي
           for (const subId of subIds) {
             await safeDeleteProductsBy("subcategory_id", subId);
           }
@@ -3715,14 +4063,23 @@ async function startServer() {
           const ahminixUuid = meta?.ahminix_order_uuid;
           if (!ahminixId && !ahminixUuid) continue;
 
-          const ext = await fetchAhminixOrderSnapshot(ahminixId, ahminixUuid);
-          if (!ext) continue;
+          // دالة الجلب مع fallback
+          const doCheck = async () => {
+            let r: any = null;
+            if (ahminixUuid && ahminixUuid !== String(ahminixId)) {
+              r = await ahminixCheckOrder(ahminixUuid, true);
+              if (r?.status !== "OK" || !r?.data?.[0]) r = null;
+            }
+            if (!r && ahminixId) {
+              r = await ahminixCheckOrder(ahminixId, String(ahminixId).includes("-"));
+            }
+            return r;
+          };
 
-          const newStatus = isAhminixAcceptedStatus(ext.status)
-            ? "completed"
-            : isAhminixRejectedStatus(ext.status)
-              ? ((await confirmAhminixRejectedStatus(ahminixId, ahminixUuid)) ? "cancelled" : "processing")
-              : "processing";
+          // استخدام getFinalOrderStatus — لا نحكم بالرفض إلا بعد 3 محاولات
+          const { status: newStatus, raw: rawStatus, data: ext } = await getFinalOrderStatus(doCheck, 3, 1000);
+
+          if (!ext) continue;
 
           // إذا لا يزال في معالجة ولم يتغير → تخطَّ
           const currentIsProcessing = ["processing", "pending"].includes(order.status);
@@ -3734,7 +4091,7 @@ async function startServer() {
           if (newStatus !== order.status) {
             const updatedMeta = {
               ...meta,
-              ahminix_status: newStatus === "processing" ? "processing" : ext.status,
+              ahminix_status: rawStatus,
               ahminix_replay: normalizedReplay,
               completed_at: new Date().toISOString()
             };
@@ -3785,7 +4142,7 @@ async function startServer() {
               }
             }
 
-            console.log(`[AUTO-REFRESH] Order #${order.id}: ${order.status} → ${newStatus}, replay=${normalizedReplay.length}`);
+            console.log(`[AUTO-REFRESH] Order #${order.id}: ${order.status} → ${newStatus} (API: ${rawStatus}), replay=${normalizedReplay.length}`);
           }
         } catch (e: any) {
           console.error(`[AUTO-REFRESH] Error on order #${order.id}:`, e.message);
@@ -3816,10 +4173,10 @@ async function startServer() {
       const apiProducts = await ahminixGetProducts();
       if (!apiProducts.length) { console.log("[AUTO-SYNC] لا منتجات من API"); return; }
 
-      // جلب كل منتجات external_api من قاعدة البيانات
+      // جلب كل منتجات external_api من قاعدة البيانات (نجلب price_per_unit لمقارنتها مع API)
       const { data: dbProducts } = await supabase
         .from("products")
-        .select("id, external_id, available, name")
+        .select("id, external_id, available, name, price_per_unit")
         .eq("store_type", "external_api")
         .not("external_id", "is", null);
 
@@ -3833,36 +4190,43 @@ async function startServer() {
         const apiProd = apiMap.get(extId);
 
         if (!apiProd) {
-          // المنتج اختفى تماماً من API → احذفه من قاعدة البيانات
-          await supabase.from("products").delete().eq("id", dbProd.id);
-          deleted++;
+          // المنتج اختفى تماماً من API → ضعه رمادياً (available = false) بدل الحذف
+          if (dbProd.available) {
+            await supabase.from("products").update({ available: false }).eq("id", dbProd.id);
+            markedUnavailable++;
+          }
           continue;
         }
 
         const apiAvailable = apiProd.available !== false;
 
+        // سعر التكلفة من API (للمقارنة وتحديثه في قاعدة البيانات)
+        const apiCostPrice = parseFloat(String(apiProd.price || 0)) || 0;
+        const dbCostPrice = parseFloat(String(dbProd.price_per_unit || 0)) || 0;
+        const priceChanged = apiCostPrice > 0 && Math.abs(apiCostPrice - dbCostPrice) > 0.000001;
+
         if (!apiAvailable && dbProd.available) {
           // أصبح غير متوفر → ضعه رمادياً (available = false) بدل الحذف
           await supabase.from("products")
-            .update({ available: false, name: apiProd.name })
+            .update({ available: false, name: apiProd.name, ...(apiCostPrice > 0 ? { price_per_unit: apiCostPrice } : {}) })
             .eq("id", dbProd.id);
           markedUnavailable++;
         } else if (apiAvailable && !dbProd.available) {
           // عاد متوفراً → أعد تفعيله
           await supabase.from("products")
-            .update({ available: true, name: apiProd.name })
+            .update({ available: true, name: apiProd.name, ...(apiCostPrice > 0 ? { price_per_unit: apiCostPrice } : {}) })
             .eq("id", dbProd.id);
           restored++;
-        } else if (apiAvailable && dbProd.name !== apiProd.name) {
-          // تحديث الاسم فقط إذا تغيّر
+        } else if (apiAvailable && (dbProd.name !== apiProd.name || priceChanged)) {
+          // تحديث الاسم و/أو سعر التكلفة إذا تغيّرا
           await supabase.from("products")
-            .update({ name: apiProd.name })
+            .update({ name: apiProd.name, ...(apiCostPrice > 0 ? { price_per_unit: apiCostPrice } : {}) })
             .eq("id", dbProd.id);
           updated++;
         }
       }
 
-      console.log(`[AUTO-SYNC] اكتملت: تحديث=${updated}, تعطيل=${markedUnavailable}, استعادة=${restored}, حذف=${deleted}`);
+      console.log(`[AUTO-SYNC] اكتملت: تحديث=${updated}, تعطيل=${markedUnavailable}, استعادة=${restored}`);
     } catch (e: any) {
       console.error("[AUTO-SYNC] خطأ:", e.message);
     }
@@ -3870,8 +4234,8 @@ async function startServer() {
 
   // تشغيل فوري بعد 10 ثوانٍ ثم كل ساعة
   setTimeout(autoSyncProducts, 10000);
-  setInterval(autoSyncProducts, 60 * 60 * 1000);
-  console.log("[AUTO-SYNC] مجدول — كل ساعة");
+  setInterval(autoSyncProducts, 5 * 60 * 1000);
+  console.log("[AUTO-SYNC] مجدول — كل 5 دقائق");
 
   // =================== TELEGRAM BOTS ===================
   startBots();
