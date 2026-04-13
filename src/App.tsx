@@ -1103,7 +1103,7 @@ export default function App() {
     }
 
     // Handle Admin Route — استعادة الجلسة إن وُجد توكن محفوظ
-    if (window.location.pathname === "/adminvipa7d1216") {
+    if (window.location.pathname === "/adminalazeaz1.7v") {
       const savedAdminToken = localStorage.getItem("adminToken");
       if (savedAdminToken) {
         // تحقق من صلاحية التوكن قبل الدخول المباشر
