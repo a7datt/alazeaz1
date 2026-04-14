@@ -1843,8 +1843,7 @@ export default function App() {
   };
 
   const Drawer = () => {
-    const whatsappLink = siteSettings?.find((s: any) => s.key === "support_whatsapp")?.value || "https://chat.whatsapp.com/DELXtdEh9ua5edFTupESNU";
-
+    const whatsappLink = `https://wa.me/${siteSettings?.find((s: any) => s.key === "support_whatsapp")?.value || ""}`;
     return (
     <AnimatePresence>
       {isDrawerOpen && (
