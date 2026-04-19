@@ -692,8 +692,6 @@ const QuickOrderViewComponent = ({
   user,
   theme,
   siteSettings,
-  playerId,
-  setPlayerId,
   setView,
   fetchUser,
 }: {
@@ -701,13 +699,12 @@ const QuickOrderViewComponent = ({
   user: any;
   theme: any;
   siteSettings: any[];
-  playerId: string;
-  setPlayerId: (v: string) => void;
   setView: (v: any) => void;
   fetchUser: (id: number) => void;
 }) => {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [playerId, setPlayerId] = React.useState("");
 
   const finalPrice = user?.is_vip ? Number(prod.price) * 0.95 : Number(prod.price);
 
@@ -816,7 +813,7 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [checkoutQuantity, setCheckoutQuantity] = useState<number>(0);
   const [checkoutOrderResult, setCheckoutOrderResult] = useState<any>(null);
-  const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -1139,19 +1136,7 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [view, activeTab, navigateBack]);
 
-  // ===== RESET QUICK ORDER PLAYER ID ONLY WHEN PRODUCT CHANGES =====
-  const prevQuickOrderProdId = React.useRef<any>(null);
-  useEffect(() => {
-    if (view.type === "quick_order") {
-      const currentProdId = view.data?.id;
-      if (prevQuickOrderProdId.current !== currentProdId) {
-        prevQuickOrderProdId.current = currentProdId;
-        setQuickOrderPlayerId("");
-      }
-    } else {
-      prevQuickOrderProdId.current = null;
-    }
-  }, [view]);
+
 
   // ===== PULL TO REFRESH (DISABLED) =====
   useEffect(() => {
@@ -3594,7 +3579,7 @@ export default function App() {
             <ExternalLink size={9} />
           </a>
           <a href="https://chat.whatsapp.com/DELXtdEh9ua5edFTupESNU" target="_blank" rel="noopener noreferrer">
-            <img src="https://i.ibb.co/HTTzrLbP" alt="Syrbit" className="h-8 object-contain opacity-80 hover:opacity-100 transition-opacity" />
+            <img src="https://i.ibb.co/ZzhLc5fW/image.png" alt="Syrbit" className="h-8 object-contain opacity-80 hover:opacity-100 transition-opacity" />
           </a>
         </div>
       </div>
@@ -8489,7 +8474,7 @@ const AdminPanel = ({
                     {view.type === "sub_sub_categories" && <SubSubCategoriesView />}
                     {view.type === "products" && <ProductsView />}
                     {(view.type === "checkout" || (checkoutOrderResult && activeTab === "home")) && <CheckoutView />}
-                    {view.type === "quick_order" && !checkoutOrderResult && <QuickOrderViewComponent prod={view.data} user={user} theme={theme} siteSettings={siteSettings} playerId={quickOrderPlayerId} setPlayerId={setQuickOrderPlayerId} setView={setView} fetchUser={fetchUser} />}
+                    {view.type === "quick_order" && !checkoutOrderResult && <QuickOrderViewComponent prod={view.data} user={user} theme={theme} siteSettings={siteSettings} setView={setView} fetchUser={fetchUser} />}
                     {view.type === "success" && !checkoutOrderResult && <SuccessView />}
                     {view.type === "login" && <LoginView />}
                     {view.type === "forgot_password" && <ForgotPasswordView />}
