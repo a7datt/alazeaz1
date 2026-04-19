@@ -698,6 +698,7 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [checkoutQuantity, setCheckoutQuantity] = useState<number>(0);
   const [checkoutOrderResult, setCheckoutOrderResult] = useState<any>(null);
+  const [quickOrderPlayerId, setQuickOrderPlayerId] = useState<string>("");
   const [orders, setOrders] = useState<Order[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -1019,6 +1020,20 @@ export default function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [view, activeTab, navigateBack]);
+
+  // ===== RESET QUICK ORDER PLAYER ID ONLY WHEN PRODUCT CHANGES =====
+  const prevQuickOrderProdId = React.useRef<any>(null);
+  useEffect(() => {
+    if (view.type === "quick_order") {
+      const currentProdId = view.data?.id;
+      if (prevQuickOrderProdId.current !== currentProdId) {
+        prevQuickOrderProdId.current = currentProdId;
+        setQuickOrderPlayerId("");
+      }
+    } else {
+      prevQuickOrderProdId.current = null;
+    }
+  }, [view]);
 
   // ===== PULL TO REFRESH (DISABLED) =====
   useEffect(() => {
@@ -2688,7 +2703,8 @@ export default function App() {
 
   const QuickOrderView = () => {
     const prod = view.data;
-    const [playerId, setPlayerId] = useState("");
+    const playerId = quickOrderPlayerId;
+    const setPlayerId = setQuickOrderPlayerId;
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
