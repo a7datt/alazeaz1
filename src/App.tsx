@@ -686,6 +686,124 @@ const WalletChargeView: React.FC<WalletChargeViewProps> = React.memo(({
 });
 // ===================== END WALLET CHARGE VIEW =====================
 
+// ===================== QUICK ORDER VIEW (مكوّن مستقل خارج App لمنع إعادة التهيئة) =====================
+const QuickOrderViewComponent = ({
+  prod,
+  user,
+  theme,
+  siteSettings,
+  playerId,
+  setPlayerId,
+  setView,
+  fetchUser,
+}: {
+  prod: any;
+  user: any;
+  theme: any;
+  siteSettings: any[];
+  playerId: string;
+  setPlayerId: (v: string) => void;
+  setView: (v: any) => void;
+  fetchUser: (id: number) => void;
+}) => {
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  const finalPrice = user?.is_vip ? Number(prod.price) * 0.95 : Number(prod.price);
+
+  const handleQuickOrder = async () => {
+    if (!user) return;
+    if (!playerId) return setError("يرجى إدخال المعرف");
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("authToken") || ""}` },
+        body: JSON.stringify({
+          userId: user.id,
+          productId: prod.id,
+          quantity: 1,
+          extraData: { playerId, storeType: 'quick_order' }
+        })
+      });
+
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Expected JSON response from orders API");
+      }
+
+      const data = await res.json();
+      if (data.success) {
+        fetchUser(user.id);
+        setView({ type: "success", data: "تم إرسال الطلب السريع بنجاح!" });
+      } else {
+        setError(data.error || "حدث خطأ ما");
+      }
+    } catch (e: any) {
+      if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
+        setError("فشل الاتصال بالخادم (تأكد من اتصالك بالإنترنت)");
+      } else {
+        setError("حدث خطأ ما أثناء إرسال الطلب");
+        console.error("Quick order error:", e);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="px-4 space-y-6 pb-20">
+      <div className="flex items-center gap-2 mb-6">
+        <button onClick={() => setView({ type: "products", data: "الرجوع" })} className="p-2 bg-gray-100 rounded-full">
+          <ArrowRight size={20} className="text-gray-600" />
+        </button>
+        <h2 className="text-xl font-bold text-gray-800">متجر الطلب السريع</h2>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-6">
+        <div className="text-center space-y-2">
+          <h4 className="font-bold text-lg text-gray-800">{prod.name}</h4>
+          <div className="flex flex-col items-center">
+            {user?.is_vip && <p className="text-gray-400 line-through text-sm">{prod.price.toFixed(2)} $</p>}
+            <p className={`${theme.text} font-bold text-xl`}>{finalPrice.toFixed(2)} $</p>
+            {user?.is_vip && <span className="text-[10px] bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-bold mt-1">خصم VIP {siteSettings?.find((s: any) => s.key === "vip_discount")?.value || "5"}%</span>}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-gray-700">ضع المعرف (ID)</label>
+            <input
+              type="text"
+              value={playerId}
+              onChange={(e) => setPlayerId(e.target.value)}
+              placeholder="أدخل المعرف هنا..."
+              className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-4 text-center text-lg font-bold outline-none focus:${theme.border}`}
+            />
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded-xl text-center">
+            <p className="text-xs text-gray-500 mb-1">السعر الإجمالي</p>
+            <p className="text-xl font-bold text-gray-800">{finalPrice.toFixed(2)} $</p>
+          </div>
+
+          {error && <p className="text-red-500 text-sm text-center font-medium">{error}</p>}
+
+          <button
+            disabled={loading}
+            onClick={handleQuickOrder}
+            className={`w-full ${theme.button} text-white py-4 rounded-xl font-bold shadow-lg ${theme.shadow} disabled:opacity-50`}
+          >
+            {loading ? "جاري الإرسال..." : "إرسال الطلب"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+// ===================== END QUICK ORDER VIEW =====================
+
 export default function App() {
   const [activeTab, setActiveTab] = useState("home");
   const [user, setUser] = useState<UserData | null>(null);
@@ -2701,106 +2819,18 @@ export default function App() {
     </div>
   );
 
-  const QuickOrderView = () => {
-    const prod = view.data;
-    const playerId = quickOrderPlayerId;
-    const setPlayerId = setQuickOrderPlayerId;
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
-
-    const finalPrice = user?.is_vip ? Number(prod.price) * 0.95 : Number(prod.price);
-
-    const handleQuickOrder = async () => {
-      if (!user) return;
-      if (!playerId) return setError("يرجى إدخال المعرف");
-      
-      setLoading(true);
-      try {
-        const res = await fetch("/api/orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("authToken") || ""}` },
-          body: JSON.stringify({
-            userId: user.id,
-            productId: prod.id,
-            quantity: 1,
-            extraData: { playerId, storeType: 'quick_order' }
-          })
-        });
-        
-        const contentType = res.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-          throw new Error("Expected JSON response from orders API");
-        }
-
-        const data = await res.json();
-        if (data.success) {
-          fetchUser(user.id);
-          setView({ type: "success", data: "تم إرسال الطلب السريع بنجاح!" });
-        } else {
-          setError(data.error || "حدث خطأ ما");
-        }
-      } catch (e: any) {
-        if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
-          setError("فشل الاتصال بالخادم (تأكد من اتصالك بالإنترنت)");
-        } else {
-          setError("حدث خطأ ما أثناء إرسال الطلب");
-          console.error("Quick order error:", e);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    return (
-      <div className="px-4 space-y-6 pb-20">
-        <div className="flex items-center gap-2 mb-6">
-          <button onClick={() => setView({ type: "products", data: "الرجوع" })} className="p-2 bg-gray-100 rounded-full">
-            <ArrowRight size={20} className="text-gray-600" />
-          </button>
-          <h2 className="text-xl font-bold text-gray-800">متجر الطلب السريع</h2>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-6">
-          <div className="text-center space-y-2">
-            <h4 className="font-bold text-lg text-gray-800">{prod.name}</h4>
-            <div className="flex flex-col items-center">
-              {user?.is_vip && <p className="text-gray-400 line-through text-sm">{prod.price.toFixed(2)} $</p>}
-              <p className={`${theme.text} font-bold text-xl`}>{finalPrice.toFixed(2)} $</p>
-              {user?.is_vip && <span className="text-[10px] bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-bold mt-1">خصم VIP {siteSettings?.find((s:any)=>s.key==="vip_discount")?.value || "5"}%</span>}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-gray-700">ضع المعرف (ID)</label>
-              <input 
-                type="text" 
-                value={playerId}
-                onChange={(e) => setPlayerId(e.target.value)}
-                placeholder="أدخل المعرف هنا..."
-                className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-4 text-center text-lg font-bold outline-none focus:${theme.border}`}
-              />
-            </div>
-
-            <div className="bg-gray-50 p-4 rounded-xl text-center">
-              <p className="text-xs text-gray-500 mb-1">السعر الإجمالي</p>
-              <p className="text-xl font-bold text-gray-800">{finalPrice.toFixed(2)} $</p>
-            </div>
-
-            {error && <p className="text-red-500 text-sm text-center font-medium">{error}</p>}
-
-            <button 
-              disabled={loading}
-              onClick={handleQuickOrder}
-              className={`w-full ${theme.button} text-white py-4 rounded-xl font-bold shadow-lg ${theme.shadow} disabled:opacity-50`}
-            >
-              {loading ? "جاري الإرسال..." : "إرسال الطلب"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const QuickOrderView = () => (
+    <QuickOrderViewComponent
+      prod={view.data}
+      user={user}
+      theme={theme}
+      siteSettings={siteSettings}
+      playerId={quickOrderPlayerId}
+      setPlayerId={setQuickOrderPlayerId}
+      setView={setView}
+      fetchUser={fetchUser}
+    />
+  );
 
   const CheckoutView = () => {
     const prod = view.data || (checkoutOrderResult?.prod);
