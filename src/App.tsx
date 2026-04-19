@@ -2819,19 +2819,6 @@ export default function App() {
     </div>
   );
 
-  const QuickOrderView = () => (
-    <QuickOrderViewComponent
-      prod={view.data}
-      user={user}
-      theme={theme}
-      siteSettings={siteSettings}
-      playerId={quickOrderPlayerId}
-      setPlayerId={setQuickOrderPlayerId}
-      setView={setView}
-      fetchUser={fetchUser}
-    />
-  );
-
   const CheckoutView = () => {
     const prod = view.data || (checkoutOrderResult?.prod);
     const qtyRef = React.useRef<HTMLInputElement>(null);
@@ -8496,7 +8483,7 @@ const AdminPanel = ({
                     {view.type === "sub_sub_categories" && <SubSubCategoriesView />}
                     {view.type === "products" && <ProductsView />}
                     {(view.type === "checkout" || (checkoutOrderResult && activeTab === "home")) && <CheckoutView />}
-                    {view.type === "quick_order" && !checkoutOrderResult && <QuickOrderView />}
+                    {view.type === "quick_order" && !checkoutOrderResult && <QuickOrderViewComponent prod={view.data} user={user} theme={theme} siteSettings={siteSettings} playerId={quickOrderPlayerId} setPlayerId={setQuickOrderPlayerId} setView={setView} fetchUser={fetchUser} />}
                     {view.type === "success" && !checkoutOrderResult && <SuccessView />}
                     {view.type === "login" && <LoginView />}
                     {view.type === "forgot_password" && <ForgotPasswordView />}
