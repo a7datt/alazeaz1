@@ -3586,12 +3586,15 @@ export default function App() {
         </div>
 
         {/* Syrbit Copyright */}
-        <div className="flex justify-center py-4">
+        <div className="flex flex-col items-center py-4 gap-2">
           <a href="https://chat.whatsapp.com/DELXtdEh9ua5edFTupESNU" target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-1.5 text-[10px] text-gray-400 hover:text-purple-500 transition-colors">
             <span>برمجة شركة</span>
             <span className="font-black text-purple-500">Syrbit</span>
             <ExternalLink size={9} />
+          </a>
+          <a href="https://chat.whatsapp.com/DELXtdEh9ua5edFTupESNU" target="_blank" rel="noopener noreferrer">
+            <img src="https://i.ibb.co/HTTzrLbP" alt="Syrbit" className="h-8 object-contain opacity-80 hover:opacity-100 transition-opacity" />
           </a>
         </div>
       </div>
@@ -7239,12 +7242,15 @@ const AdminElementsTab = ({categories, subcategories, subSubCategories, fetchCat
     </AnimatePresence>
 
     {/* Syrbit Copyright */}
-    <div className="flex justify-center pb-4 pt-2">
+    <div className="flex flex-col items-center pb-4 pt-2 gap-2">
       <a href="https://chat.whatsapp.com/DELXtdEh9ua5edFTupESNU" target="_blank" rel="noopener noreferrer"
         className="flex items-center gap-1.5 text-[10px] text-gray-400 hover:text-purple-500 transition-colors">
         <span>برمجة شركة</span>
         <span className="font-black text-purple-500">Syrbit</span>
         <ExternalLink size={9} />
+      </a>
+      <a href="https://chat.whatsapp.com/DELXtdEh9ua5edFTupESNU" target="_blank" rel="noopener noreferrer">
+        <img src="https://i.ibb.co/HTTzrLbP" alt="Syrbit" className="h-8 object-contain opacity-80 hover:opacity-100 transition-opacity" />
       </a>
     </div>
   </div>
